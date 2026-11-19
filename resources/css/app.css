@@ -1,0 +1,721 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-display: 'Marcellus', ui-serif, Georgia, 'Times New Roman', serif;
+    /* Handwriting, for what the barista writes on the card. */
+    --font-hand: 'Kalam', 'Segoe Print', 'Bradley Hand', cursive;
+}
+
+/* Niskala brand colors, taken from the packaging: espresso brown and the
+   champagne gold of the lotus logo. `static` keeps them emitted even when
+   only the component CSS below uses them. */
+@theme static {
+    --color-espresso-950: #18110c;
+    --color-espresso-900: #221812;
+    --color-espresso-800: #2e2118;
+    --color-espresso-700: #3c2b1f;
+    --color-espresso-600: #4f3a2a;
+
+    --color-gold-100: #f6ead3;
+    --color-gold-200: #ecd8b1;
+    --color-gold-300: #dfc28c;
+    --color-gold-400: #cda46a;
+    --color-gold-500: #b38a4f;
+
+    --color-cream-50: #fcfaf6;
+    --color-cream-100: #f5efe5;
+    --color-cream-200: #ebe2d3;
+
+    /* The stamp card is a paper object: card stock, print ink, the
+       barista's ballpoint and the red rubber-stamp ink. */
+    --color-paper: #f4ecdd;
+    --color-ink: #2a1d14;
+    --color-pen: #2d3b6e;
+    --color-stamp-red: #a1361f;
+}
+
+/* ------------------------------------------------------------------------
+   Loyalty stamp card
+   A printed paper card. It keeps its paper look on both light and dark
+   pages. Only what a person adds to it moves: stickers are placed one by
+   one, the rubber stamp lands last. The printed parts stay still.
+   ------------------------------------------------------------------------ */
+@layer components {
+    .brand-logo {
+        display: inline-block;
+        flex: none;
+        aspect-ratio: 1;
+        background-color: currentColor;
+        -webkit-mask: var(--brand-logo) center / contain no-repeat;
+        mask: var(--brand-logo) center / contain no-repeat;
+    }
+
+    /* Card stock shared by the stamp card and the verify form. */
+    .paper-card {
+        --ink-soft: rgb(42 29 20 / 0.62);
+        --ink-faint: rgb(42 29 20 / 0.3);
+        /* Speckled ink for rubber stamps: holes where the noise is bright. */
+        --ink-speckle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cfilter id='i'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -4 0 0 0 3.15'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23i)'/%3E%3C/svg%3E");
+
+        position: relative;
+        isolation: isolate;
+        overflow: hidden;
+        border-radius: 0.75rem;
+        padding: 0.5rem;
+        color: var(--color-ink);
+        /* Card stock: flat colour plus a fine fibre grain. */
+        background-color: var(--color-paper);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .3 0 0 0 0 .2 0 0 0 0 .1 .24 0 0 0 -.06'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        box-shadow:
+            0 1px 1px rgb(24 17 12 / 0.12),
+            0 3px 8px -2px rgb(24 17 12 / 0.2),
+            0 18px 30px -18px rgb(24 17 12 / 0.55);
+    }
+
+    /* Printed border line. */
+    .paper-card__frame {
+        border: 1px solid var(--ink-faint);
+        border-radius: 0.375rem;
+        padding: 1rem 0.875rem 0.875rem;
+    }
+
+    @media (min-width: 400px) {
+        .paper-card__frame {
+            padding: 1.25rem 1.125rem 1rem;
+        }
+    }
+
+    .stamp-card__head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .stamp-card__wordmark {
+        font-family: var(--font-display);
+        font-size: 1.1875rem;
+        line-height: 1;
+        letter-spacing: 0.2em;
+    }
+
+    .stamp-card__sub {
+        margin-top: 0.25rem;
+        font-size: 0.6875rem;
+        line-height: 1;
+        letter-spacing: 0.08em;
+        color: var(--ink-soft);
+    }
+
+    .stamp-card__number {
+        font-size: 0.6875rem;
+        line-height: 1.35;
+        text-align: right;
+        color: var(--ink-soft);
+    }
+
+    .stamp-card__number span {
+        display: block;
+        color: var(--color-ink);
+        font-variant-numeric: tabular-nums;
+    }
+
+    @media (min-width: 400px) {
+        .stamp-card__wordmark {
+            font-size: 1.375rem;
+        }
+    }
+
+    /* Stamp grid -------------------------------------------------------- */
+    .stamp-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 0.5rem 0.5rem;
+        margin-top: 1.25rem;
+    }
+
+    .stamp-slot {
+        position: relative;
+        min-width: 0;
+    }
+
+    .stamp-slot__button {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.125rem;
+        width: 100%;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .stamp-slot__button:focus-visible {
+        outline: none;
+    }
+
+    .stamp-slot__button:focus-visible .stamp-slot__spot {
+        outline: 2px solid var(--color-pen);
+        outline-offset: 3px;
+    }
+
+    /* The printed spot: a dashed circle with its number. */
+    .stamp-slot__spot {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 100%;
+        max-width: 4.25rem;
+        aspect-ratio: 1;
+        border: 1.5px dashed var(--ink-faint);
+        border-radius: 9999px;
+        color: var(--ink-soft);
+    }
+
+    .stamp-slot__number {
+        font-size: 0.875rem;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* Reward spots are printed heavier, with the reward written inside. */
+    .stamp-slot.is-reward .stamp-slot__spot {
+        border: 3px double rgb(42 29 20 / 0.6);
+        color: var(--color-ink);
+    }
+
+    .stamp-slot__free {
+        display: grid;
+        font-size: 0.5625rem;
+        font-weight: 600;
+        line-height: 1.1;
+        text-align: center;
+    }
+
+    .stamp-slot__free small {
+        font-size: 0.5rem;
+        font-weight: 400;
+        color: var(--ink-soft);
+    }
+
+    @media (min-width: 400px) {
+        .stamp-slot__free {
+            font-size: 0.625rem;
+        }
+
+        .stamp-slot__free small {
+            font-size: 0.5625rem;
+        }
+    }
+
+    /* A product sticker stuck on by hand: tilted, with a slight lift. */
+    .stamp-slot__sticker {
+        position: absolute;
+        inset: -2px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        border-radius: 9999px;
+        background: #fff;
+        box-shadow:
+            0 1px 1px rgb(42 29 20 / 0.2),
+            0 3px 6px -3px rgb(42 29 20 / 0.45);
+        transform: rotate(var(--tilt, 0deg));
+        transition:
+            transform 0.25s cubic-bezier(0.3, 1.4, 0.5, 1),
+            box-shadow 0.25s;
+        animation: sticker-place 0.5s cubic-bezier(0.25, 0.9, 0.35, 1.15) backwards;
+        animation-delay: calc(var(--i, 0) * 80ms + 150ms);
+    }
+
+    /* On a reward spot the printed double ring stays visible around it. */
+    .stamp-slot.is-reward .stamp-slot__sticker {
+        inset: 4px;
+    }
+
+    .stamp-slot__sticker img {
+        width: 86%;
+        height: 86%;
+        object-fit: contain;
+    }
+
+    /* The newest sticker goes on last, a beat after the others. */
+    .stamp-slot.is-fresh .stamp-slot__sticker {
+        animation-duration: 0.7s;
+        animation-delay: calc(var(--i, 0) * 80ms + 550ms);
+    }
+
+    /* Picking at a sticker: it lifts and straightens a little. */
+    @media (hover: hover) {
+        .stamp-slot__button:hover .stamp-slot__sticker {
+            transform: translateY(-2px) rotate(calc(var(--tilt, 0deg) * 0.4));
+            box-shadow:
+                0 2px 2px rgb(42 29 20 / 0.16),
+                0 8px 12px -6px rgb(42 29 20 / 0.5);
+        }
+    }
+
+    .stamp-slot__button:active .stamp-slot__spot {
+        transform: scale(0.95);
+    }
+
+    .stamp-slot__spot {
+        transition: transform 0.12s;
+    }
+
+    /* Collection date, written by the barista in ballpoint. */
+    .stamp-slot__date {
+        min-height: 1.25rem;
+        font-family: var(--font-hand);
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        color: var(--color-pen);
+        transform: rotate(-4deg);
+        white-space: nowrap;
+    }
+
+    /* Slot details, shown on tap / hover / keyboard focus. */
+    .stamp-slot__tip {
+        position: absolute;
+        z-index: 2;
+        bottom: calc(100% - 0.75rem);
+        left: 50%;
+        width: max-content;
+        max-width: 10.5rem;
+        padding: 0.4375rem 0.625rem;
+        border-radius: 0.375rem;
+        background: var(--color-espresso-900);
+        color: var(--color-cream-50);
+        font-size: 0.75rem;
+        line-height: 1.3;
+        box-shadow: 0 6px 16px -6px rgb(0 0 0 / 0.5);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translate(var(--tip-x, -50%), 4px);
+        transition:
+            opacity 0.15s,
+            transform 0.15s,
+            visibility 0.15s;
+    }
+
+    .stamp-slot__tip strong {
+        display: block;
+        font-weight: 600;
+    }
+
+    .stamp-slot__tip span {
+        display: block;
+        color: rgb(252 250 246 / 0.75);
+    }
+
+    /* Edge columns: keep the bubble inside the card. */
+    .stamp-slot:nth-child(5n + 1) .stamp-slot__tip {
+        --tip-x: 0;
+        left: 0;
+    }
+
+    .stamp-slot:nth-child(5n) .stamp-slot__tip {
+        --tip-x: 0;
+        right: 0;
+        left: auto;
+    }
+
+    .stamp-slot.is-open .stamp-slot__tip,
+    .stamp-slot__button:focus-visible + .stamp-slot__tip {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(var(--tip-x, -50%), 0);
+    }
+
+    @media (hover: hover) {
+        .stamp-slot:hover .stamp-slot__tip {
+            opacity: 1;
+            visibility: visible;
+            transform: translate(var(--tip-x, -50%), 0);
+        }
+    }
+
+    /* Reward list: printed like a menu, with dotted leaders ------------ */
+    .reward-list {
+        display: grid;
+        gap: 0.625rem;
+        margin-top: 1.125rem;
+        padding-top: 0.875rem;
+        border-top: 1px dashed var(--ink-faint);
+    }
+
+    .reward-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-height: 1.75rem;
+        font-size: 0.875rem;
+    }
+
+    .reward-row__at {
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 1.375rem;
+        height: 1.375rem;
+        border: 1px solid var(--ink-soft);
+        border-radius: 9999px;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .reward-row__text {
+        display: grid;
+        min-width: 0;
+    }
+
+    .reward-row__label {
+        font-weight: 500;
+        line-height: 1.2;
+    }
+
+    .reward-row__hint {
+        font-size: 0.6875rem;
+        line-height: 1.3;
+        color: var(--ink-soft);
+    }
+
+    .reward-row__leader {
+        flex: 1;
+        min-width: 0.75rem;
+        align-self: flex-end;
+        margin-bottom: 0.4em;
+        border-bottom: 1.5px dotted var(--ink-faint);
+    }
+
+    .reward-row__state {
+        flex: none;
+        font-size: 0.75rem;
+        color: var(--ink-soft);
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* Ready: the cashier's red rubber stamp, pressed on after the stickers. */
+    .reward-row.is-ready .reward-row__state {
+        padding: 0.3125rem 0.4375rem 0.25rem;
+        border: 2px solid currentColor;
+        border-radius: 0.25rem;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--color-stamp-red);
+        transform: rotate(-5deg);
+        -webkit-mask: var(--ink-speckle) 0 0 / 90px;
+        mask: var(--ink-speckle) 0 0 / 90px;
+        animation: stamp-thud 0.4s cubic-bezier(0.3, 1.5, 0.5, 1) backwards;
+        animation-delay: calc(var(--collected, 0) * 80ms + 450ms);
+    }
+
+    /* Claimed: crossed out and noted in pen. */
+    .reward-row.is-redeemed .reward-row__label {
+        text-decoration: line-through;
+        text-decoration-color: var(--color-pen);
+        text-decoration-thickness: 1.5px;
+        color: var(--ink-soft);
+    }
+
+    .reward-row.is-redeemed .reward-row__state {
+        font-family: var(--font-hand);
+        font-size: 0.9375rem;
+        color: var(--color-pen);
+        transform: rotate(-3deg);
+    }
+
+    .reward-row.is-expired {
+        color: var(--ink-soft);
+    }
+
+    /* Footer ----------------------------------------------------------- */
+    .stamp-card__foot {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-top: 1rem;
+        padding-top: 0.875rem;
+        border-top: 1px dashed var(--ink-faint);
+    }
+
+    .stamp-card__label {
+        font-size: 0.6875rem;
+        line-height: 1.3;
+        color: var(--ink-soft);
+    }
+
+    .stamp-card__owner {
+        margin-top: 0.125rem;
+        overflow: hidden;
+        font-family: var(--font-display);
+        font-size: 1.125rem;
+        line-height: 1.25;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .stamp-card__meta {
+        overflow: hidden;
+        font-size: 0.6875rem;
+        color: var(--ink-soft);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* Sans numerals: Marcellus draws 1 like a capital I ("IO/IO"). */
+    .stamp-card__count {
+        font-size: 1.625rem;
+        font-weight: 600;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .stamp-card__count span {
+        font-size: 0.9375rem;
+        font-weight: 400;
+        color: var(--ink-soft);
+    }
+
+    /* Verify form: the same card stock, with a line to write the number
+       on. Narrow phones get tighter padding: the Turnstile widget needs
+       300px. ------------------------------------------------------------ */
+    .verify-card {
+        padding: 0.375rem;
+    }
+
+    .verify-card .paper-card__frame {
+        padding: 1.25rem 0.625rem 0.875rem;
+    }
+
+    @media (min-width: 400px) {
+        .verify-card {
+            padding: 0.5rem;
+        }
+
+        .verify-card .paper-card__frame {
+            padding: 1.5rem 1.25rem 1.25rem;
+        }
+    }
+
+    .verify-card__title {
+        font-family: var(--font-display);
+        font-size: 1.5rem;
+        line-height: 1.2;
+    }
+
+    .verify-card__intro {
+        margin-top: 0.5rem;
+        font-size: 0.875rem;
+        line-height: 1.55;
+        color: var(--ink-soft);
+    }
+
+    .verify-card__note {
+        margin-top: 1rem;
+        padding: 0.125rem 0 0.125rem 0.75rem;
+        border-left: 2px solid var(--color-stamp-red);
+        font-size: 0.8125rem;
+        line-height: 1.45;
+    }
+
+    .verify-card__label {
+        display: block;
+        margin-top: 1.5rem;
+        font-size: 0.75rem;
+        color: var(--ink-soft);
+    }
+
+    /* Written in pen on a printed line. */
+    .verify-card__input {
+        display: block;
+        width: 100%;
+        padding: 0.125rem 0.125rem 0.0625rem;
+        border: 0;
+        border-bottom: 1.5px solid rgb(42 29 20 / 0.45);
+        border-radius: 0;
+        background: transparent;
+        color: var(--color-pen);
+        font-family: var(--font-hand);
+        font-size: 1.625rem;
+        line-height: 1.35;
+        letter-spacing: 0.03em;
+        outline: none;
+        transition: border-color 0.15s;
+    }
+
+    .verify-card__input::placeholder {
+        color: rgb(42 29 20 / 0.28);
+        font-family: var(--font-sans);
+        font-size: 1rem;
+        letter-spacing: 0.04em;
+    }
+
+    .verify-card__input:focus {
+        border-bottom-color: var(--color-pen);
+    }
+
+    .verify-card__input[aria-invalid='true'] {
+        border-bottom-color: var(--color-stamp-red);
+    }
+
+    .verify-card__error {
+        margin-top: 0.5rem;
+        font-size: 0.8125rem;
+        line-height: 1.45;
+        color: var(--color-stamp-red);
+    }
+
+    /* Reserve the widget's height (65px) so the button doesn't jump. */
+    .verify-card__check {
+        min-height: 65px;
+        margin-top: 1.5rem;
+    }
+
+    .verify-card__check-status {
+        padding-top: 0.25rem;
+        font-size: 0.8125rem;
+        line-height: 1.45;
+        color: var(--ink-soft);
+    }
+
+    .verify-card__check-status.is-problem {
+        color: var(--color-stamp-red);
+    }
+
+    .verify-card__check-status button {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--color-pen);
+        font: inherit;
+        font-weight: 600;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        cursor: pointer;
+    }
+
+    .verify-card__submit {
+        display: block;
+        width: 100%;
+        margin-top: 1rem;
+        padding: 0.8125rem 1rem;
+        border: 0;
+        border-radius: 0.375rem;
+        background: var(--color-ink);
+        color: var(--color-paper);
+        font-size: 0.9375rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+            background-color 0.15s,
+            transform 0.1s;
+    }
+
+    .verify-card__submit:hover:not(:disabled) {
+        background: var(--color-espresso-700);
+    }
+
+    .verify-card__submit:active:not(:disabled) {
+        transform: translateY(1px);
+    }
+
+    .verify-card__submit:focus-visible {
+        outline: 2px solid var(--color-pen);
+        outline-offset: 2px;
+    }
+
+    .verify-card__submit:disabled {
+        cursor: not-allowed;
+        opacity: 0.4;
+    }
+
+    /* Card states: a finished card gets a big rubber stamp across it --- */
+    .stamp-card.is-redeemed .paper-card__frame,
+    .stamp-card.is-expired .paper-card__frame {
+        opacity: 0.55;
+    }
+
+    .stamp-card.is-expired .paper-card__frame {
+        filter: grayscale(1);
+    }
+
+    .stamp-card__overlay {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+    }
+
+    .stamp-card__overlay-label {
+        padding: 0.375rem 1rem 0.3125rem;
+        border: 4px solid currentColor;
+        border-radius: 0.5rem;
+        font-size: 1.75rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--color-stamp-red);
+        transform: rotate(-12deg);
+        -webkit-mask: var(--ink-speckle) 0 0 / 120px;
+        mask: var(--ink-speckle) 0 0 / 120px;
+    }
+
+    .stamp-card.is-expired .stamp-card__overlay-label {
+        color: var(--color-ink);
+    }
+}
+
+@keyframes sticker-place {
+    0% {
+        opacity: 0;
+        transform: translateY(-12px) scale(1.15) rotate(calc(var(--tilt, 0deg) - 12deg));
+    }
+    65% {
+        opacity: 1;
+        transform: translateY(0) scale(0.97) rotate(var(--tilt, 0deg));
+    }
+    100% {
+        transform: rotate(var(--tilt, 0deg));
+    }
+}
+
+@keyframes stamp-thud {
+    0% {
+        opacity: 0;
+        transform: rotate(-5deg) scale(1.9);
+    }
+    60% {
+        opacity: 1;
+        transform: rotate(-5deg) scale(0.94);
+    }
+    100% {
+        transform: rotate(-5deg) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .stamp-card *,
+    .stamp-card *::before,
+    .stamp-card *::after {
+        animation: none !important;
+        transition: none !important;
+    }
+}

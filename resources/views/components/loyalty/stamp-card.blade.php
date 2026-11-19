@@ -1,0 +1,213 @@
+{{--
+    Niskala loyalty stamp card, drawn as the paper card a barista stamps:
+    printed parts (spots, reward circles, text) sit still; the things a
+    person adds (product stickers, pen dates, the rubber "ready" stamp)
+    are the ones that move.
+
+    <x-loyalty.stamp-card
+        customer-code="NSK-000001"
+        card-number="NSK-000001-01"
+        customer-name="Budi"            (optional)
+        phone="6281234567890"           (optional, normalized form)
+        :stamps="$datesOfCollectedStamps" (Carbon|string, oldest first)
+        :slots="10"
+        :status="$card->status"         (LoyaltyCardStatus or its value)
+        :redeemed-rewards="[5]"         (stamp numbers whose reward was claimed)
+        :fresh-stamp="true"             (the newest sticker is placed last, slower)
+        :rewards="[...]"                (optional, defaults to config('loyalty.rewards'))
+    />
+
+    Slot images come from config('loyalty.stamp_images'), in slot order.
+    Tapping a slot shows its details (resources/js/stamp-card.js).
+--}}
+@props([
+    'customerCode',
+    'cardNumber',
+    'customerName' => null,
+    'phone' => null,
+    'stamps' => [],
+    'slots' => 10,
+    'status' => \App\Enums\LoyaltyCardStatus::Active,
+    'redeemedRewards' => [],
+    'freshStamp' => false,
+    'rewards' => null,
+])
+
+@use('App\Enums\LoyaltyCardStatus')
+@use('Illuminate\Support\Carbon')
+
+@php
+    $status = $status instanceof LoyaltyCardStatus ? $status : LoyaltyCardStatus::from($status);
+    $stamps = collect($stamps)->values();
+    $slots = max(1, (int) $slots);
+    $collected = min($stamps->count(), $slots);
+    $images = config('loyalty.stamp_images');
+    $redeemed = collect($redeemedRewards)->map(fn ($stamp) => (int) $stamp);
+
+    // Each reward: locked -> ready (stamp reached) -> redeemed (claimed at
+    // the cashier). A redeemed card has had all of them; on an expired card
+    // the unclaimed ones are forfeited.
+    $rewards = collect($rewards ?? config('loyalty.rewards'))
+        ->filter(fn (array $reward) => $reward['stamps'] >= 1 && $reward['stamps'] <= $slots)
+        ->sortBy('stamps')
+        ->map(function (array $reward) use ($collected, $status, $redeemed) {
+            $state = match (true) {
+                $status === LoyaltyCardStatus::Redeemed, $redeemed->contains($reward['stamps']) => 'redeemed',
+                $status === LoyaltyCardStatus::Expired => 'expired',
+                $collected >= $reward['stamps'] => 'ready',
+                default => 'locked',
+            };
+
+            return [
+                ...$reward,
+                'state' => $state,
+                'stateLabel' => match ($state) {
+                    'redeemed' => 'Sudah ditukar',
+                    'expired' => 'Hangus',
+                    'ready' => 'Siap ditukar',
+                    'locked' => ($reward['stamps'] - $collected).' stamp lagi',
+                },
+            ];
+        })
+        ->keyBy('stamps');
+
+    // Fixed per-slot tilt: varied like stickers put on by hand, identical on every render.
+    $tilts = [-7, 4, -3, 6, -5, 3, -6, 5, -2, 7];
+
+    $formatDate = fn ($date) => Carbon::parse($date)->locale(app()->getLocale());
+
+    // 6281234567890 -> 0812••••7890
+    $maskedPhone = null;
+    if (filled($phone)) {
+        $local = str_starts_with($phone, '62') ? '0'.substr($phone, 2) : $phone;
+        $maskedPhone = substr($local, 0, 4).'••••'.substr($local, -4);
+    }
+    $identity = collect([$customerCode, $maskedPhone])->filter()->implode(' · ');
+
+    $statusMessage = match (true) {
+        $status === LoyaltyCardStatus::Redeemed => 'Semua hadiah ditukar',
+        $status === LoyaltyCardStatus::Expired => 'Kartu kedaluwarsa',
+        $rewards->contains('state', 'ready') => 'Hadiah siap ditukar',
+        default => 'stamp terkumpul',
+    };
+
+    $overlay = match ($status) {
+        LoyaltyCardStatus::Redeemed => 'Ditukar',
+        LoyaltyCardStatus::Expired => 'Kedaluwarsa',
+        default => null,
+    };
+@endphp
+
+<article
+    {{ $attributes->class([
+        'paper-card',
+        'stamp-card',
+        'is-redeemed' => $status === LoyaltyCardStatus::Redeemed,
+        'is-expired' => $status === LoyaltyCardStatus::Expired,
+    ]) }}
+    style="--collected: {{ $collected }}"
+    aria-label="Kartu stamp {{ $cardNumber }}"
+    data-stamp-card
+>
+    <div class="paper-card__frame">
+        <header class="stamp-card__head">
+            <div class="min-w-0">
+                <p class="stamp-card__wordmark">NISKALA</p>
+                <p class="stamp-card__sub">Coffee</p>
+            </div>
+            <p class="stamp-card__number">
+                Kartu stamp
+                <span>No. {{ $cardNumber }}</span>
+            </p>
+        </header>
+
+        <ol class="stamp-grid" aria-label="{{ $collected }} dari {{ $slots }} stamp terkumpul">
+            @for ($i = 0; $i < $slots; $i++)
+                @php
+                    $filled = $i < $collected;
+                    $reward = $rewards->get($i + 1);
+                    $image = $images[$i % count($images)];
+                    $date = $filled ? $formatDate($stamps[$i]) : null;
+
+                    // Shown when the slot is tapped or hovered.
+                    [$tipTitle, $tipText] = match (true) {
+                        $filled && $reward => ['Stamp ke-'.($i + 1).' · '.$reward['label'], $date->translatedFormat('j F Y').' · '.$reward['stateLabel']],
+                        $filled => ['Stamp ke-'.($i + 1), 'Terkumpul '.$date->translatedFormat('j F Y')],
+                        $reward !== null => ['Stamp ke-'.($i + 1).' · '.$reward['label'], $reward['stateLabel']],
+                        default => ['Stamp ke-'.($i + 1), 'Belum terkumpul'],
+                    };
+                @endphp
+                <li
+                    @class([
+                        'stamp-slot',
+                        'is-filled' => $filled,
+                        'is-reward' => $reward,
+                        'is-fresh' => $freshStamp && $filled && $i === $collected - 1,
+                    ])
+                    style="--tilt: {{ $tilts[$i % count($tilts)] }}deg; --i: {{ $i }}"
+                >
+                    <button type="button" class="stamp-slot__button">
+                        <span class="stamp-slot__spot" aria-hidden="true">
+                            @if ($reward)
+                                <span class="stamp-slot__free"><small>gratis</small>{{ $reward['short'] }}</span>
+                            @else
+                                <span class="stamp-slot__number">{{ $i + 1 }}</span>
+                            @endif
+                            @if ($filled)
+                                <span class="stamp-slot__sticker">
+                                    <img src="{{ asset($image['file']) }}" alt="" width="400" height="400" loading="lazy" decoding="async">
+                                </span>
+                            @endif
+                        </span>
+                        <span class="stamp-slot__date" aria-hidden="true">{{ $filled ? $date->format('j/n') : '' }}</span>
+                        <span class="sr-only">
+                            Stamp {{ $i + 1 }}{{ $reward ? ' (hadiah: '.$reward['label'].')' : '' }}:
+                            {{ $filled ? 'terkumpul '.$date->translatedFormat('j F Y') : 'belum terkumpul' }}
+                        </span>
+                    </button>
+                    {{-- Visual repeat of the button's accessible name. --}}
+                    <span class="stamp-slot__tip" aria-hidden="true">
+                        <strong>{{ $tipTitle }}</strong>
+                        <span>{{ $tipText }}</span>
+                    </span>
+                </li>
+            @endfor
+        </ol>
+
+        @if ($rewards->isNotEmpty())
+            <ul class="reward-list" aria-label="Hadiah">
+                @foreach ($rewards as $reward)
+                    <li class="reward-row is-{{ $reward['state'] }}">
+                        <span class="reward-row__at" title="Stamp ke-{{ $reward['stamps'] }}">{{ $reward['stamps'] }}</span>
+                        <span class="reward-row__text">
+                            <span class="reward-row__label">{{ $reward['label'] }}</span>
+                            @if ($reward['state'] === 'ready')
+                                <span class="reward-row__hint">Tunjukkan ke kasir</span>
+                            @endif
+                        </span>
+                        <span class="reward-row__leader" aria-hidden="true"></span>
+                        <span class="reward-row__state">{{ $reward['stateLabel'] }}</span>
+                    </li>
+                @endforeach
+            </ul>
+        @endif
+
+        <footer class="stamp-card__foot">
+            <div class="min-w-0">
+                <p class="stamp-card__label">Pemilik kartu</p>
+                <p class="stamp-card__owner">{{ $customerName ?: 'Pelanggan Niskala' }}</p>
+                <p class="stamp-card__meta">{{ $identity }}</p>
+            </div>
+            <div class="shrink-0 text-right">
+                <p class="stamp-card__count">{{ $collected }}<span>/{{ $slots }}</span></p>
+                <p class="stamp-card__label mt-1">{{ $statusMessage }}</p>
+            </div>
+        </footer>
+    </div>
+
+    @if ($overlay)
+        <div class="stamp-card__overlay" aria-hidden="true">
+            <span class="stamp-card__overlay-label">{{ $overlay }}</span>
+        </div>
+    @endif
+</article>

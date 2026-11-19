@@ -1,0 +1,277 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Enums\LoyaltyCardStatus;
+use App\Models\LoyaltyCard;
+use App\Models\LoyaltyStamp;
+use App\Models\Pos\PosUser;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Testing\TestResponse;
+use Tests\TestCase;
+
+/**
+ * /api/pos/*, as pos-backend calls it. Runs on pos_live_raw: the POS
+ * orders these tests need are inserted inside the test transaction and
+ * rolled back with everything else. 0800 numbers are never a customer's.
+ */
+class PosLoyaltyApiTest extends TestCase
+{
+    use DatabaseTransactions;
+
+    private const TOKEN = 'test-pos-token';
+
+    private int $orderSequence = 0;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config([
+            'loyalty.pos_api_token' => self::TOKEN,
+            'loyalty.stamps_per_card' => 10,
+            'loyalty.stamp_min_order_total' => 100000,
+        ]);
+    }
+
+    public function test_the_api_needs_the_shared_token(): void
+    {
+        $this->getJson('/api/pos/customers/080000000201')->assertUnauthorized();
+        $this->withToken('wrong')->getJson('/api/pos/customers/080000000201')->assertUnauthorized();
+
+        config(['loyalty.pos_api_token' => '']);
+        $this->withToken('')->getJson('/api/pos/customers/080000000201')->assertServiceUnavailable();
+    }
+
+    public function test_an_unknown_number_is_reported_without_registering_it(): void
+    {
+        $this->api('get', '/api/pos/customers/0800-0000-0201')
+            ->assertOk()
+            ->assertExactJson(['registered' => false, 'phone' => '6280000000201', 'stamp_min_order_total' => 100000]);
+
+        $this->assertDatabaseMissing('loyalty_customers', ['phone_number' => '6280000000201']);
+    }
+
+    public function test_an_invalid_number_is_refused(): void
+    {
+        $this->api('get', '/api/pos/customers/abc')
+            ->assertUnprocessable()
+            ->assertJson(['reason' => 'invalid_phone']);
+    }
+
+    public function test_the_first_order_of_a_number_registers_it_and_gives_stamp_one(): void
+    {
+        $cashier = PosUser::query()->firstOrFail();
+        $orderId = $this->posOrder(['customer_phone' => '0800-0000-0202', 'customer_name' => 'Sinta']);
+
+        $this->api('post', '/api/pos/stamps', ['order_id' => $orderId, 'cashier_id' => $cashier->id])
+            ->assertCreated()
+            ->assertJson([
+                'stamped' => true,
+                'stamp_number' => 1,
+                'customer_created' => true,
+                'registered' => true,
+                'customer' => ['name' => 'Sinta', 'phone' => '6280000000202'],
+                'card' => ['stamps' => 1, 'slots' => 10, 'status' => 'active'],
+                'ready_rewards' => [],
+                'next_reward' => ['stamps' => 5, 'label' => 'Minuman gratis', 'remaining' => 4],
+            ]);
+
+        $stamp = LoyaltyStamp::query()->where('order_id', $orderId)->sole();
+        $this->assertSame($cashier->id, $stamp->created_by);
+
+        $this->api('get', '/api/pos/customers/080000000202')
+            ->assertOk()
+            ->assertJson(['registered' => true, 'card' => ['stamps' => 1]]);
+    }
+
+    public function test_an_order_earns_only_one_stamp_however_often_it_is_sent(): void
+    {
+        $orderId = $this->posOrder(['customer_phone' => '080000000203']);
+
+        $this->api('post', '/api/pos/stamps', ['order_id' => $orderId])->assertCreated();
+        $this->api('post', '/api/pos/stamps', ['order_id' => $orderId])
+            ->assertOk()
+            ->assertJson(['stamped' => false, 'stamp_number' => 1, 'card' => ['stamps' => 1]]);
+
+        $this->assertSame(1, LoyaltyStamp::query()->where('order_id', $orderId)->count());
+    }
+
+    public function test_guest_names_are_not_kept_as_the_customer_name(): void
+    {
+        $orderId = $this->posOrder(['customer_phone' => '080000000204', 'customer_name' => 'Guest-12']);
+
+        $this->api('post', '/api/pos/stamps', ['order_id' => $orderId])
+            ->assertCreated()
+            ->assertJson(['customer' => ['name' => null]]);
+    }
+
+    public function test_orders_that_cannot_earn_a_stamp_are_refused_with_a_reason(): void
+    {
+        $cases = [
+            'no_phone' => $this->posOrder(['customer_phone' => null]),
+            'order_type' => $this->posOrder(['customer_phone' => '080000000205', 'order_type' => 'Online']),
+            'below_minimum' => $this->posOrder(['customer_phone' => '080000000205', 'total' => 99999, 'total_with_tax' => 99999]),
+            'invalid_phone' => $this->posOrder(['customer_phone' => '12']),
+        ];
+
+        foreach ($cases as $reason => $orderId) {
+            $this->api('post', '/api/pos/stamps', ['order_id' => $orderId])
+                ->assertUnprocessable()
+                ->assertJson(['reason' => $reason]);
+        }
+
+        $this->api('post', '/api/pos/stamps', ['order_id' => 999999999])
+            ->assertNotFound()
+            ->assertJson(['reason' => 'order_not_found']);
+
+        $this->assertDatabaseMissing('loyalty_customers', ['phone_number' => '6280000000205']);
+    }
+
+    public function test_an_order_earns_a_stamp_from_rp_100000(): void
+    {
+        $below = $this->posOrder(['customer_phone' => '080000000211', 'total' => 90909, 'total_with_tax' => 99999]);
+        $exact = $this->posOrder(['customer_phone' => '080000000211', 'total' => 90910, 'total_with_tax' => 100000]);
+
+        $this->api('post', '/api/pos/stamps', ['order_id' => $below])
+            ->assertUnprocessable()
+            ->assertJson(['reason' => 'below_minimum', 'message' => 'Total order di bawah minimal stamp (Rp 100.000).']);
+
+        $this->api('post', '/api/pos/stamps', ['order_id' => $exact])
+            ->assertCreated()
+            ->assertJson(['stamp_number' => 1]);
+    }
+
+    public function test_a_full_card_is_completed_and_the_next_stamp_starts_a_new_card(): void
+    {
+        $phone = '080000000206';
+        $this->stampOrders($phone, 10);
+
+        $first = LoyaltyCard::query()->whereHas('customer', fn ($q) => $q->where('phone_number', '6280000000206'))->sole();
+        $this->assertSame(LoyaltyCardStatus::Completed, $first->status);
+        $this->assertSame(10, $first->total_stamps);
+
+        $this->api('get', "/api/pos/customers/{$phone}")
+            ->assertJson([
+                'card' => ['number' => $first->card_number, 'stamps' => 10, 'status' => 'completed'],
+                'ready_rewards' => [
+                    ['stamps' => 5, 'label' => 'Minuman gratis', 'count' => 1],
+                    ['stamps' => 10, 'label' => 'Makanan gratis', 'count' => 1],
+                ],
+                'next_reward' => null,
+            ]);
+
+        $this->stampOrders($phone, 1)
+            ->assertJson([
+                'stamp_number' => 1,
+                'card_number' => str_replace('-01', '-02', $first->card_number),
+                'card' => ['stamps' => 1, 'status' => 'active'],
+                // The full card's rewards are still there to claim.
+                'ready_rewards' => [['stamps' => 5, 'count' => 1], ['stamps' => 10, 'count' => 1]],
+            ]);
+    }
+
+    public function test_a_reward_is_redeemed_once_and_only_when_ready(): void
+    {
+        $phone = '080000000207';
+        $cashier = PosUser::query()->firstOrFail();
+        $this->stampOrders($phone, 4);
+
+        $redeem = fn (int $stamps) => $this->api('post', '/api/pos/redemptions', [
+            'phone' => $phone,
+            'reward_stamps' => $stamps,
+            'cashier_id' => $cashier->id,
+        ]);
+
+        $redeem(5)->assertUnprocessable()->assertJson(['reason' => 'reward_not_ready']);
+
+        $this->stampOrders($phone, 1)->assertJson(['ready_rewards' => [['stamps' => 5, 'count' => 1]]]);
+
+        $redeem(5)
+            ->assertCreated()
+            ->assertJson([
+                'redeemed' => ['reward' => 'Minuman gratis', 'reward_stamps' => 5],
+                'card' => ['stamps' => 5, 'status' => 'active'],
+                'ready_rewards' => [],
+            ]);
+        $this->assertDatabaseHas('loyalty_redemptions', ['redeemed_by' => $cashier->id]);
+
+        $redeem(5)->assertUnprocessable()->assertJson(['reason' => 'reward_not_ready']);
+        $redeem(7)->assertUnprocessable()->assertJson(['reason' => 'unknown_reward']);
+    }
+
+    public function test_redeeming_the_last_reward_of_a_full_card_closes_it(): void
+    {
+        $phone = '080000000208';
+        $this->stampOrders($phone, 10);
+
+        $this->api('post', '/api/pos/redemptions', ['phone' => $phone, 'reward_stamps' => 10])->assertCreated();
+        $this->api('post', '/api/pos/redemptions', ['phone' => $phone, 'reward_stamps' => 5])
+            ->assertCreated()
+            ->assertJson(['card' => ['status' => 'redeemed'], 'ready_rewards' => []]);
+    }
+
+    public function test_redeeming_for_an_unknown_number_is_refused(): void
+    {
+        $this->api('post', '/api/pos/redemptions', ['phone' => '080000000209', 'reward_stamps' => 5])
+            ->assertNotFound()
+            ->assertJson(['reason' => 'not_registered']);
+    }
+
+    public function test_sync_command_stamps_orders_the_pos_could_not_deliver(): void
+    {
+        $missed = $this->posOrder(['customer_phone' => '080000000210']);
+        $withoutPhone = $this->posOrder(['customer_phone' => null]);
+
+        $this->artisan('loyalty:sync-stamps')->assertSuccessful();
+
+        $this->assertDatabaseHas('loyalty_stamps', ['order_id' => $missed, 'stamp_number' => 1]);
+        $this->assertDatabaseMissing('loyalty_stamps', ['order_id' => $withoutPhone]);
+
+        // A second run gives nothing twice.
+        $this->artisan('loyalty:sync-stamps')->assertSuccessful();
+        $this->assertSame(1, LoyaltyStamp::query()->where('order_id', $missed)->count());
+    }
+
+    private function api(string $method, string $uri, array $data = []): TestResponse
+    {
+        return $this->withToken(self::TOKEN)->json($method, $uri, $data);
+    }
+
+    /**
+     * Stamps $count new orders of $phone; returns the last response.
+     */
+    private function stampOrders(string $phone, int $count): TestResponse
+    {
+        $response = null;
+        for ($i = 0; $i < $count; $i++) {
+            $response = $this->api('post', '/api/pos/stamps', [
+                'order_id' => $this->posOrder(['customer_phone' => $phone]),
+            ])->assertCreated();
+        }
+
+        return $response;
+    }
+
+    /**
+     * A POS order, inserted only inside this test's rolled-back transaction.
+     */
+    private function posOrder(array $overrides = []): int
+    {
+        $this->orderSequence++;
+
+        return DB::table('orders')->insertGetId([
+            'order_code' => 'LOYALTY-TEST-'.uniqid().'-'.$this->orderSequence,
+            'customer_name' => 'Pelanggan Uji',
+            'customer_phone' => null,
+            'order_type' => 'Offline',
+            'order_status' => 'In Progress',
+            'order_date' => now(),
+            'total' => 100000,
+            'tax' => 0,
+            'total_with_tax' => 100000,
+            ...$overrides,
+        ]);
+    }
+}
