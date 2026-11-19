@@ -55,6 +55,11 @@ return [
 
     'stamp_min_order_total' => (int) env('LOYALTY_STAMP_MIN_ORDER_TOTAL', 100000),
 
+    // At most this many stamps per phone number per day, counted by the
+    // order's date (Asia/Jakarta): a second order the same day earns none.
+    // 0: no limit.
+    'max_stamps_per_day' => (int) env('LOYALTY_MAX_STAMPS_PER_DAY', 1),
+
     // loyalty:sync-stamps looks this many days back for orders that never
     // got their stamp (the loyalty app was down when the POS called).
     'sync_days' => (int) env('LOYALTY_SYNC_DAYS', 2),

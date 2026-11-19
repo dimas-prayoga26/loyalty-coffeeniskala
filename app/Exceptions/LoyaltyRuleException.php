@@ -39,6 +39,11 @@ class LoyaltyRuleException extends RuntimeException
         return new self('below_minimum', 'Total order di bawah minimal stamp (Rp '.number_format($minimum, 0, ',', '.').').');
     }
 
+    public static function dailyLimitReached(): self
+    {
+        return new self('daily_limit', 'Nomor ini sudah dapat stamp hari ini.');
+    }
+
     public static function invalidPhone(): self
     {
         return new self('invalid_phone', 'Nomor HP tidak valid.');

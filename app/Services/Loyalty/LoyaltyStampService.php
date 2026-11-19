@@ -8,6 +8,7 @@ use App\Exceptions\LoyaltyRuleException;
 use App\Models\LoyaltyCard;
 use App\Models\LoyaltyStamp;
 use App\Models\Pos\PosOrder;
+use Carbon\CarbonInterface;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -22,6 +23,9 @@ use RuntimeException;
  *
  * A card that reaches stamps_per_card becomes Completed; the next stamp
  * goes on a new card (registerOrRetrieve issues it).
+ *
+ * A number earns at most max_stamps_per_day stamps on the order's day: the
+ * next order that day is refused (daily_limit), whichever card it is on.
  */
 class LoyaltyStampService
 {
@@ -101,6 +105,13 @@ class LoyaltyStampService
             return null;
         }
 
+        // Checked under the card lock: two orders of one number at once
+        // can't both take the day's stamp.
+        $day = $order->order_date ?? now();
+        if (self::stampsOn($card->loyalty_customer_id, $day) >= self::maxStampsPerDay()) {
+            throw LoyaltyRuleException::dailyLimitReached();
+        }
+
         $number = $card->total_stamps + 1;
 
         $stamp = $card->stamps()->create([
@@ -147,6 +158,27 @@ class LoyaltyStampService
         $name = trim((string) $order->customer_name);
 
         return $name === '' || preg_match('/^guest(-\d+)?$/i', $name) ? null : $name;
+    }
+
+    /**
+     * Stamps the customer got on $day, over all their cards.
+     */
+    public static function stampsOn(int $customerId, CarbonInterface $day): int
+    {
+        return LoyaltyStamp::query()
+            ->whereHas('card', fn ($query) => $query->where('loyalty_customer_id', $customerId))
+            ->whereBetween('stamped_at', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])
+            ->count();
+    }
+
+    /**
+     * PHP_INT_MAX when there is no daily limit (max_stamps_per_day 0).
+     */
+    public static function maxStampsPerDay(): int
+    {
+        $max = (int) config('loyalty.max_stamps_per_day');
+
+        return $max > 0 ? $max : PHP_INT_MAX;
     }
 
     private function existingStamp(int $orderId): ?LoyaltyStamp

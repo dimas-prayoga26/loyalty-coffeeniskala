@@ -24,6 +24,8 @@ class PosLoyaltyApiTest extends TestCase
 
     private int $orderSequence = 0;
 
+    private int $orderDay = 0;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -32,6 +34,7 @@ class PosLoyaltyApiTest extends TestCase
             'loyalty.pos_api_token' => self::TOKEN,
             'loyalty.stamps_per_card' => 10,
             'loyalty.stamp_min_order_total' => 100000,
+            'loyalty.max_stamps_per_day' => 1,
         ]);
     }
 
@@ -143,6 +146,48 @@ class PosLoyaltyApiTest extends TestCase
             ->assertJson(['stamp_number' => 1]);
     }
 
+    public function test_a_number_earns_one_stamp_a_day(): void
+    {
+        $phone = '080000000211';
+        $today = now()->startOfDay();
+        $morning = $this->posOrder(['customer_phone' => $phone, 'order_date' => $today->copy()->addHours(9)]);
+        $afternoon = $this->posOrder(['customer_phone' => $phone, 'order_date' => $today->copy()->addHours(16)]);
+
+        $this->api('post', '/api/pos/stamps', ['order_id' => $morning])->assertCreated();
+        $this->api('post', '/api/pos/stamps', ['order_id' => $afternoon])
+            ->assertUnprocessable()
+            ->assertJson(['reason' => 'daily_limit', 'message' => 'Nomor ini sudah dapat stamp hari ini.']);
+        $this->assertDatabaseMissing('loyalty_stamps', ['order_id' => $afternoon]);
+
+        // The morning order is still its stamp of the day.
+        $this->api('post', '/api/pos/stamps', ['order_id' => $morning])->assertOk();
+        $this->api('get', "/api/pos/customers/{$phone}")
+            ->assertJson(['card' => ['stamps' => 1], 'daily_limit_reached' => true]);
+
+        // Another number the same day is not held back.
+        $this->api('post', '/api/pos/stamps', [
+            'order_id' => $this->posOrder(['customer_phone' => '080000000212', 'order_date' => $today->copy()->addHours(16)]),
+        ])->assertCreated();
+    }
+
+    public function test_the_day_is_the_order_date_and_the_limit_can_be_lifted(): void
+    {
+        $phone = '080000000213';
+        $this->api('post', '/api/pos/stamps', [
+            'order_id' => $this->posOrder(['customer_phone' => $phone, 'order_date' => now()->subDay()]),
+        ])->assertCreated();
+        $this->api('get', "/api/pos/customers/{$phone}")->assertJson(['daily_limit_reached' => false]);
+
+        $this->api('post', '/api/pos/stamps', [
+            'order_id' => $this->posOrder(['customer_phone' => $phone, 'order_date' => now()]),
+        ])->assertCreated()->assertJson(['stamp_number' => 2]);
+
+        config(['loyalty.max_stamps_per_day' => 0]);
+        $this->api('post', '/api/pos/stamps', [
+            'order_id' => $this->posOrder(['customer_phone' => $phone, 'order_date' => now()]),
+        ])->assertCreated()->assertJson(['stamp_number' => 3, 'daily_limit_reached' => false]);
+    }
+
     public function test_a_full_card_is_completed_and_the_next_stamp_starts_a_new_card(): void
     {
         $phone = '080000000206';
@@ -234,20 +279,35 @@ class PosLoyaltyApiTest extends TestCase
         $this->assertSame(1, LoyaltyStamp::query()->where('order_id', $missed)->count());
     }
 
+    public function test_sync_command_keeps_to_one_stamp_a_day(): void
+    {
+        $first = $this->posOrder(['customer_phone' => '080000000214', 'order_date' => now()->startOfDay()->addHours(9)]);
+        $second = $this->posOrder(['customer_phone' => '080000000214', 'order_date' => now()->startOfDay()->addHours(16)]);
+
+        $this->artisan('loyalty:sync-stamps')->assertSuccessful();
+
+        $this->assertDatabaseHas('loyalty_stamps', ['order_id' => $first]);
+        $this->assertDatabaseMissing('loyalty_stamps', ['order_id' => $second]);
+    }
+
     private function api(string $method, string $uri, array $data = []): TestResponse
     {
         return $this->withToken(self::TOKEN)->json($method, $uri, $data);
     }
 
     /**
-     * Stamps $count new orders of $phone; returns the last response.
+     * Stamps $count new orders of $phone, each on a day of its own (one
+     * stamp a day); returns the last response.
      */
     private function stampOrders(string $phone, int $count): TestResponse
     {
         $response = null;
         for ($i = 0; $i < $count; $i++) {
             $response = $this->api('post', '/api/pos/stamps', [
-                'order_id' => $this->posOrder(['customer_phone' => $phone]),
+                'order_id' => $this->posOrder([
+                    'customer_phone' => $phone,
+                    'order_date' => now()->subDays(365)->addDays($this->orderDay++),
+                ]),
             ])->assertCreated();
         }
 

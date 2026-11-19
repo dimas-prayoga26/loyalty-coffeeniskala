@@ -6,6 +6,7 @@ use App\Enums\LoyaltyCardStatus;
 use App\Models\LoyaltyCard;
 use App\Models\LoyaltyCustomer;
 use App\Models\LoyaltyRedemption;
+use App\Models\LoyaltyStamp;
 use Illuminate\Support\Collection;
 
 /**
@@ -64,7 +65,17 @@ final class LoyaltyCustomerSummary
             ] : null,
             'ready_rewards' => self::readyRewards($customer),
             'next_reward' => self::nextReward($current),
+            // Today's stamp already given: another order today earns none.
+            'daily_limit_reached' => self::stampsToday($customer) >= LoyaltyStampService::maxStampsPerDay(),
         ];
+    }
+
+    private static function stampsToday(LoyaltyCustomer $customer): int
+    {
+        return $customer->cards
+            ->flatMap(fn (LoyaltyCard $card) => $card->stamps)
+            ->filter(fn (LoyaltyStamp $stamp) => $stamp->stamped_at?->isToday())
+            ->count();
     }
 
     /**
