@@ -14,6 +14,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Behind Cloudflare: take the visitor's IP and https from the
+        // X-Forwarded-* headers, so /verify's throttle and Turnstile see the
+        // customer, not a Cloudflare edge shared by everyone.
+        $middleware->trustProxies(at: '*');
+
         $middleware->alias([
             'pos.api' => AuthenticatePosApi::class,
         ]);

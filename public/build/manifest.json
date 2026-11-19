@@ -1,0 +1,61 @@
+{
+  "_fonts-kIGtXThy.css": {
+    "file": "assets/fonts-kIGtXThy.css",
+    "src": "_fonts-kIGtXThy.css"
+  },
+  "_instrument-sans-400-normal-D1W7dsQl.woff": {
+    "file": "assets/instrument-sans-400-normal-D1W7dsQl.woff",
+    "src": "_instrument-sans-400-normal-D1W7dsQl.woff"
+  },
+  "_instrument-sans-400-normal-DRC__1Mx.woff2": {
+    "file": "assets/instrument-sans-400-normal-DRC__1Mx.woff2",
+    "src": "_instrument-sans-400-normal-DRC__1Mx.woff2"
+  },
+  "_instrument-sans-500-normal-Dk9ku72i.woff2": {
+    "file": "assets/instrument-sans-500-normal-Dk9ku72i.woff2",
+    "src": "_instrument-sans-500-normal-Dk9ku72i.woff2"
+  },
+  "_instrument-sans-500-normal-Z6ESRlEs.woff": {
+    "file": "assets/instrument-sans-500-normal-Z6ESRlEs.woff",
+    "src": "_instrument-sans-500-normal-Z6ESRlEs.woff"
+  },
+  "_instrument-sans-600-normal-B7fBEWYG.woff2": {
+    "file": "assets/instrument-sans-600-normal-B7fBEWYG.woff2",
+    "src": "_instrument-sans-600-normal-B7fBEWYG.woff2"
+  },
+  "_instrument-sans-600-normal-B9e8oLYv.woff": {
+    "file": "assets/instrument-sans-600-normal-B9e8oLYv.woff",
+    "src": "_instrument-sans-600-normal-B9e8oLYv.woff"
+  },
+  "_kalam-400-normal-Bl-H2BUA.woff": {
+    "file": "assets/kalam-400-normal-Bl-H2BUA.woff",
+    "src": "_kalam-400-normal-Bl-H2BUA.woff"
+  },
+  "_kalam-400-normal-BthBl_aR.woff2": {
+    "file": "assets/kalam-400-normal-BthBl_aR.woff2",
+    "src": "_kalam-400-normal-BthBl_aR.woff2"
+  },
+  "_marcellus-400-normal-86dSXJnk.woff2": {
+    "file": "assets/marcellus-400-normal-86dSXJnk.woff2",
+    "src": "_marcellus-400-normal-86dSXJnk.woff2"
+  },
+  "_marcellus-400-normal-AvMY561b.woff": {
+    "file": "assets/marcellus-400-normal-AvMY561b.woff",
+    "src": "_marcellus-400-normal-AvMY561b.woff"
+  },
+  "resources/css/app.css": {
+    "file": "assets/app-B10J7Ko1.css",
+    "name": "app",
+    "names": [
+      "app.css"
+    ],
+    "src": "resources/css/app.css",
+    "isEntry": true
+  },
+  "resources/js/app.js": {
+    "file": "assets/app-ulpZXUzO.js",
+    "name": "app",
+    "src": "resources/js/app.js",
+    "isEntry": true
+  }
+}

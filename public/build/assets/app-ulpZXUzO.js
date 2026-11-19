@@ -1,0 +1,1 @@
+function e(e=null){document.querySelectorAll(`.stamp-slot.is-open`).forEach(t=>{t!==e&&t.classList.remove(`is-open`)})}document.addEventListener(`click`,t=>{let n=t.target.closest(`[data-stamp-card] .stamp-slot__button`);if(!n){e();return}let r=n.closest(`.stamp-slot`);e(r),r.classList.toggle(`is-open`)}),document.addEventListener(`keydown`,t=>{t.key===`Escape`&&e()});
