@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Support\WhatsAppNumber;
 use Illuminate\Database\Console\Migrations\FreshCommand;
 use Illuminate\Database\Console\WipeCommand;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->protectPosDatabase();
+
+        WhatsAppNumber::allowTestNumbers(config('loyalty.test_numbers', []));
     }
 
     /**

@@ -64,6 +64,13 @@ return [
     // got their stamp (the loyalty app was down when the POS called).
     'sync_days' => (int) env('LOYALTY_SYNC_DAYS', 2),
 
+    // Demo/test numbers accepted although they are not a real mobile number
+    // (e.g. 0987654321), comma separated. Leave empty in production.
+    'test_numbers' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env('LOYALTY_TEST_NUMBERS', '')),
+    ))),
+
     /*
     |--------------------------------------------------------------------------
     | Rewards (starting list only)

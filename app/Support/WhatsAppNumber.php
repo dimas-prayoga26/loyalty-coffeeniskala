@@ -14,7 +14,42 @@ final class WhatsAppNumber
 {
     private const INDONESIA = '62';
 
+    /**
+     * Demo/test numbers accepted although they are not a real mobile
+     * number (config loyalty.test_numbers, set at boot), in stored form.
+     *
+     * @var list<string>
+     */
+    private static array $testNumbers = [];
+
     public static function normalize(string $input): string
+    {
+        $number = self::storedForm($input);
+
+        if (! self::isValid($number) && ! in_array($number, self::$testNumbers, true)) {
+            throw InvalidWhatsAppNumberException::for(trim($input));
+        }
+
+        return $number;
+    }
+
+    /**
+     * @param  iterable<string>  $numbers  as typed, e.g. "0987654321"; bad entries are ignored
+     */
+    public static function allowTestNumbers(iterable $numbers): void
+    {
+        self::$testNumbers = [];
+
+        foreach ($numbers as $number) {
+            try {
+                self::$testNumbers[] = self::storedForm((string) $number);
+            } catch (InvalidWhatsAppNumberException) {
+                continue;
+            }
+        }
+    }
+
+    private static function storedForm(string $input): string
     {
         $input = trim($input);
 
@@ -36,10 +71,6 @@ final class WhatsAppNumber
         // "+62 0812..." is a common mix of both styles.
         if (str_starts_with($number, self::INDONESIA.'0')) {
             $number = self::INDONESIA.substr($number, 3);
-        }
-
-        if (! self::isValid($number)) {
-            throw InvalidWhatsAppNumberException::for($input);
         }
 
         return $number;

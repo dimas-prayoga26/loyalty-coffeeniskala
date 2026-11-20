@@ -35,6 +35,20 @@ class WhatsAppNumberTest extends TestCase
         $this->assertSame('6591234567', WhatsAppNumber::normalize('+65 9123 4567'));
     }
 
+    public function test_a_configured_test_number_is_accepted(): void
+    {
+        WhatsAppNumber::allowTestNumbers(['0987654321', 'bukan nomor']);
+
+        try {
+            $this->assertSame('62987654321', WhatsAppNumber::normalize('0987-654-321'));
+        } finally {
+            WhatsAppNumber::allowTestNumbers([]);
+        }
+
+        $this->expectException(InvalidWhatsAppNumberException::class);
+        WhatsAppNumber::normalize('0987654321');
+    }
+
     #[DataProvider('invalidInputs')]
     public function test_invalid_input_is_rejected(string $input): void
     {
