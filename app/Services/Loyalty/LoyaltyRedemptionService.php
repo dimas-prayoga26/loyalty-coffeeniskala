@@ -13,20 +13,30 @@ use App\Support\WhatsAppNumber;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The cashier hands over a reward (config('loyalty.rewards'), picked by the
- * stamp that unlocks it). It comes off the customer's oldest card that has
- * it ready, so a full card's reward is used before the new card's.
+ * The cashier hands over a reward (an active one of Program Promo, picked
+ * by the stamp that unlocks it). It comes off the customer's oldest card
+ * that has it ready, so a full card's reward is used before the new card's.
+ * Nothing is handed over while the program is off.
  *
  * Each reward is redeemed once per card. A Completed (full) card whose
- * rewards are all redeemed becomes Redeemed.
+ * active rewards are all redeemed becomes Redeemed.
  */
 class LoyaltyRedemptionService
 {
     /**
+     * $given: the POS order it went out with and the menu given
+     * (order_id, menu_item_id, menu_name), when claimed with an order.
+     *
+     * @param  array{order_id?: int|null, menu_item_id?: int|null, menu_name?: string|null}  $given
+     *
      * @throws LoyaltyRuleException
      */
-    public function redeem(string $phone, int $rewardStamps, ?int $cashierId = null): LoyaltyRedemption
+    public function redeem(string $phone, int $rewardStamps, ?int $cashierId = null, array $given = []): LoyaltyRedemption
     {
+        if (! StampCardProgram::isActive()) {
+            throw LoyaltyRuleException::programInactive();
+        }
+
         $reward = LoyaltyCustomerSummary::reward($rewardStamps)
             ?? throw LoyaltyRuleException::unknownReward($rewardStamps);
 
@@ -36,7 +46,7 @@ class LoyaltyRedemptionService
             throw LoyaltyRuleException::invalidPhone();
         }
 
-        return DB::transaction(function () use ($phone, $reward, $cashierId) {
+        return DB::transaction(function () use ($phone, $reward, $cashierId, $given) {
             // Locks the customer: two cashiers can't hand over the same reward.
             $customer = LoyaltyCustomer::query()->where('phone_number', $phone)->lockForUpdate()->first()
                 ?? throw LoyaltyRuleException::customerNotRegistered();
@@ -59,6 +69,9 @@ class LoyaltyRedemptionService
                 'loyalty_customer_id' => $customer->id,
                 'loyalty_card_id' => $card->id,
                 'reward_id' => $rewardRow->id,
+                'order_id' => $given['order_id'] ?? null,
+                'menu_item_id' => $given['menu_item_id'] ?? null,
+                'menu_name' => $given['menu_name'] ?? null,
                 'redeemed_by' => $cashierId,
                 'redeemed_at' => now(),
             ]);
@@ -78,7 +91,8 @@ class LoyaltyRedemptionService
         $redeemed = $card->redemptions()->with('reward')->get()
             ->map(fn (LoyaltyRedemption $redemption) => $redemption->reward?->stamps_required);
 
-        $allRedeemed = collect(config('loyalty.rewards'))
+        $allRedeemed = StampCardProgram::rewards()
+            ->filter(fn (array $reward) => $reward['stamps'] <= (int) config('loyalty.stamps_per_card'))
             ->every(fn (array $reward) => $redeemed->contains($reward['stamps']));
 
         if ($allRedeemed) {

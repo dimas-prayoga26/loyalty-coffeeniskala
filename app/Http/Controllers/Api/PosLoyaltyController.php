@@ -9,6 +9,7 @@ use App\Models\LoyaltyCustomer;
 use App\Services\Loyalty\LoyaltyCustomerSummary;
 use App\Services\Loyalty\LoyaltyRedemptionService;
 use App\Services\Loyalty\LoyaltyStampService;
+use App\Services\Loyalty\StampCardProgram;
 use App\Support\WhatsAppNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -38,6 +39,8 @@ class PosLoyaltyController extends Controller
             ...($customer
                 ? LoyaltyCustomerSummary::toArray($customer)
                 : ['registered' => false, 'phone' => $normalized]),
+            // Off (Pengaturan → Program Promo): the POS shows no stamp card.
+            'program_active' => StampCardProgram::isActive(),
             // Shown in the cart: the order total that earns a stamp.
             'stamp_min_order_total' => (int) config('loyalty.stamp_min_order_total'),
         ]);
@@ -72,7 +75,9 @@ class PosLoyaltyController extends Controller
     }
 
     /**
-     * POST /api/pos/redemptions { phone, reward_stamps, cashier_id? }.
+     * POST /api/pos/redemptions { phone, reward_stamps, cashier_id?,
+     * order_id?, menu_item_id?, menu_name? }: the order the reward went out
+     * with and the menu given, when the POS claims it with an order.
      */
     public function redeem(Request $request, LoyaltyRedemptionService $redemptions): JsonResponse
     {
@@ -80,10 +85,18 @@ class PosLoyaltyController extends Controller
             'phone' => ['required', 'string', 'max:30'],
             'reward_stamps' => ['required', 'integer', 'min:1'],
             'cashier_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
+            'order_id' => ['nullable', 'integer', Rule::exists('orders', 'id')],
+            'menu_item_id' => ['nullable', 'integer', 'min:1'],
+            'menu_name' => ['nullable', 'string', 'max:120'],
         ]);
 
         try {
-            $redemption = $redemptions->redeem($data['phone'], (int) $data['reward_stamps'], $data['cashier_id'] ?? null);
+            $redemption = $redemptions->redeem(
+                $data['phone'],
+                (int) $data['reward_stamps'],
+                $data['cashier_id'] ?? null,
+                array_intersect_key($data, array_flip(['order_id', 'menu_item_id', 'menu_name'])),
+            );
         } catch (LoyaltyRuleException $e) {
             return $this->refused($e);
         }
@@ -95,6 +108,8 @@ class PosLoyaltyController extends Controller
                 'reward' => $redemption->reward->reward_name,
                 'reward_stamps' => $redemption->reward->stamps_required,
                 'card_number' => $redemption->card->card_number,
+                'order_id' => $redemption->order_id,
+                'menu_name' => $redemption->menu_name,
                 'redeemed_at' => $redemption->redeemed_at->toIso8601String(),
             ],
             ...LoyaltyCustomerSummary::toArray($customer),

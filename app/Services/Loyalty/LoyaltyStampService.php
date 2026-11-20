@@ -136,6 +136,15 @@ class LoyaltyStampService
      */
     private function assertEligible(PosOrder $order): void
     {
+        // Program Promo: off, no stamps; switched back on, only orders since.
+        $program = StampCardProgram::program();
+        if (! $program->is_active) {
+            throw LoyaltyRuleException::programInactive();
+        }
+        if ($program->active_since && $order->order_date && $order->order_date->lt($program->active_since)) {
+            throw LoyaltyRuleException::beforeProgram();
+        }
+
         if (trim((string) $order->customer_phone) === '') {
             throw LoyaltyRuleException::orderWithoutPhone();
         }

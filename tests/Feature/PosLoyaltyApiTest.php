@@ -51,7 +51,12 @@ class PosLoyaltyApiTest extends TestCase
     {
         $this->api('get', '/api/pos/customers/0800-0000-0201')
             ->assertOk()
-            ->assertExactJson(['registered' => false, 'phone' => '6280000000201', 'stamp_min_order_total' => 100000]);
+            ->assertExactJson([
+                'registered' => false,
+                'phone' => '6280000000201',
+                'program_active' => true,
+                'stamp_min_order_total' => 100000,
+            ]);
 
         $this->assertDatabaseMissing('loyalty_customers', ['phone_number' => '6280000000201']);
     }
@@ -244,6 +249,37 @@ class PosLoyaltyApiTest extends TestCase
 
         $redeem(5)->assertUnprocessable()->assertJson(['reason' => 'reward_not_ready']);
         $redeem(7)->assertUnprocessable()->assertJson(['reason' => 'unknown_reward']);
+    }
+
+    public function test_a_reward_claimed_with_an_order_keeps_the_order_and_the_menu(): void
+    {
+        $phone = '080000000216';
+        $this->stampOrders($phone, 5);
+        $order = $this->posOrder(['customer_phone' => $phone, 'total' => 0, 'total_with_tax' => 0]);
+
+        $this->api('post', '/api/pos/redemptions', [
+            'phone' => $phone,
+            'reward_stamps' => 5,
+            'order_id' => $order,
+            'menu_item_id' => 50,
+            'menu_name' => 'Loyalty Minuman Gratis (Americano)',
+        ])
+            ->assertCreated()
+            ->assertJson(['redeemed' => [
+                'reward' => 'Minuman gratis',
+                'order_id' => $order,
+                'menu_name' => 'Loyalty Minuman Gratis (Americano)',
+            ]]);
+
+        $this->assertDatabaseHas('loyalty_redemptions', [
+            'order_id' => $order,
+            'menu_item_id' => 50,
+            'menu_name' => 'Loyalty Minuman Gratis (Americano)',
+        ]);
+
+        $this->api('post', '/api/pos/redemptions', ['phone' => $phone, 'reward_stamps' => 5, 'order_id' => 999999999])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('order_id');
     }
 
     public function test_redeeming_the_last_reward_of_a_full_card_closes_it(): void

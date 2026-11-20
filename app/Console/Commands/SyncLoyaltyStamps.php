@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Exceptions\LoyaltyRuleException;
 use App\Models\Pos\PosOrder;
 use App\Services\Loyalty\LoyaltyStampService;
+use App\Services\Loyalty\StampCardProgram;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -21,6 +22,13 @@ class SyncLoyaltyStamps extends Command
 {
     public function handle(LoyaltyStampService $stamps): int
     {
+        // Program Promo off: nothing earns a stamp.
+        if (! StampCardProgram::isActive()) {
+            $this->info('Program Stamp Card tidak aktif: tidak ada stamp yang diberikan.');
+
+            return self::SUCCESS;
+        }
+
         $days = (int) ($this->option('days') ?? config('loyalty.sync_days'));
 
         $orders = PosOrder::query()

@@ -39,6 +39,16 @@ class LoyaltyRuleException extends RuntimeException
         return new self('below_minimum', 'Total order di bawah minimal stamp (Rp '.number_format($minimum, 0, ',', '.').').');
     }
 
+    public static function programInactive(): self
+    {
+        return new self('program_inactive', 'Program Stamp Card sedang tidak aktif.');
+    }
+
+    public static function beforeProgram(): self
+    {
+        return new self('before_program', 'Order ini dibuat sebelum Program Stamp Card aktif.');
+    }
+
     public static function dailyLimitReached(): self
     {
         return new self('daily_limit', 'Nomor ini sudah dapat stamp hari ini.');

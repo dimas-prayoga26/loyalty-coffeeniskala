@@ -68,6 +68,7 @@ class LoyaltyDatabaseIntegrityTest extends TestCase
             ->all();
 
         $this->assertSame([
+            'loyalty_redemptions_order_id_foreign' => 'SET NULL',
             'loyalty_redemptions_redeemed_by_foreign' => 'SET NULL',
             'loyalty_stamps_created_by_foreign' => 'SET NULL',
             'loyalty_stamps_order_id_foreign' => 'SET NULL',

@@ -14,7 +14,7 @@
         :status="$card->status"         (LoyaltyCardStatus or its value)
         :redeemed-rewards="[5]"         (stamp numbers whose reward was claimed)
         :fresh-stamp="true"             (the newest sticker is placed last, slower)
-        :rewards="[...]"                (optional, defaults to config('loyalty.rewards'))
+        :rewards="[...]"                (optional, defaults to the program's rewards: Pengaturan → Program Promo)
     />
 
     Slot images come from config('loyalty.stamp_images'), in slot order.
@@ -46,8 +46,11 @@
 
     // Each reward: locked -> ready (stamp reached) -> redeemed (claimed at
     // the cashier). A redeemed card has had all of them; on an expired card
-    // the unclaimed ones are forfeited.
-    $rewards = collect($rewards ?? config('loyalty.rewards'))
+    // the unclaimed ones are forfeited. A reward switched off in Program
+    // Promo still shows where it was already claimed.
+    $rewards = collect($rewards ?? \App\Services\Loyalty\StampCardProgram::rewards(all: true)
+            ->filter(fn (array $reward) => $reward['active'] || $redeemed->contains($reward['stamps']))
+            ->all())
         ->filter(fn (array $reward) => $reward['stamps'] >= 1 && $reward['stamps'] <= $slots)
         ->sortBy('stamps')
         ->map(function (array $reward) use ($collected, $status, $redeemed) {

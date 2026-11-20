@@ -21,11 +21,13 @@ final class LoyaltyCustomerSummary
     private const OPEN = [LoyaltyCardStatus::Active, LoyaltyCardStatus::Completed];
 
     /**
-     * @return array{stamps: int, label: string, short: string}|null
+     * An active reward of the stamp card (Pengaturan → Program Promo).
+     *
+     * @return array{id: int, stamps: int, label: string, short: string, active: bool}|null
      */
     public static function reward(int $stamps): ?array
     {
-        return collect(config('loyalty.rewards'))->firstWhere('stamps', $stamps);
+        return StampCardProgram::reward($stamps);
     }
 
     public static function findByPhone(string $normalizedPhone): ?LoyaltyCustomer
@@ -49,8 +51,11 @@ final class LoyaltyCustomerSummary
     {
         $customer = self::load($customer);
         $current = self::currentCard($customer);
+        $rewards = StampCardProgram::rewards();
 
         return [
+            // Off (Program Promo): the POS shows no stamp card at all.
+            'program_active' => StampCardProgram::isActive(),
             'registered' => true,
             'customer' => [
                 'code' => $customer->customer_code,
@@ -63,8 +68,8 @@ final class LoyaltyCustomerSummary
                 'slots' => (int) config('loyalty.stamps_per_card'),
                 'status' => $current->status->value,
             ] : null,
-            'ready_rewards' => self::readyRewards($customer),
-            'next_reward' => self::nextReward($current),
+            'ready_rewards' => self::readyRewards($customer, $rewards),
+            'next_reward' => self::nextReward($current, $rewards),
             // Today's stamp already given: another order today earns none.
             'daily_limit_reached' => self::stampsToday($customer) >= LoyaltyStampService::maxStampsPerDay(),
         ];
@@ -116,12 +121,18 @@ final class LoyaltyCustomerSummary
     }
 
     /**
-     * Rewards the cashier can hand over now, counted over all open cards.
+     * Active rewards the cashier can hand over now, counted over all open
+     * cards. None while the program is off.
      *
+     * @param  Collection<int, array{stamps: int, label: string}>  $rewards
      * @return list<array{stamps: int, label: string, count: int}>
      */
-    private static function readyRewards(LoyaltyCustomer $customer): array
+    private static function readyRewards(LoyaltyCustomer $customer, Collection $rewards): array
     {
+        if (! StampCardProgram::isActive()) {
+            return [];
+        }
+
         $counts = [];
 
         foreach ($customer->cards as $card) {
@@ -129,7 +140,7 @@ final class LoyaltyCustomerSummary
                 continue;
             }
             $redeemed = self::redeemedOn($card);
-            foreach (config('loyalty.rewards') as $reward) {
+            foreach ($rewards as $reward) {
                 if ($card->total_stamps >= $reward['stamps'] && ! $redeemed->contains($reward['stamps'])) {
                     $counts[$reward['stamps']] = ($counts[$reward['stamps']] ?? 0) + 1;
                 }
@@ -141,25 +152,26 @@ final class LoyaltyCustomerSummary
         return collect($counts)
             ->map(fn (int $count, int $stamps) => [
                 'stamps' => $stamps,
-                'label' => self::reward($stamps)['label'],
+                'label' => $rewards->firstWhere('stamps', $stamps)['label'],
                 'count' => $count,
+                // The POS Promo loyalty menu Tukar puts in the order.
+                'promo_menu_item_id' => $rewards->firstWhere('stamps', $stamps)['promo_menu_item_id'],
             ])
             ->values()
             ->all();
     }
 
     /**
+     * @param  Collection<int, array{stamps: int, label: string}>  $rewards
      * @return array{stamps: int, label: string, remaining: int}|null
      */
-    private static function nextReward(?LoyaltyCard $card): ?array
+    private static function nextReward(?LoyaltyCard $card, Collection $rewards): ?array
     {
         if ($card === null || $card->status !== LoyaltyCardStatus::Active) {
             return null;
         }
 
-        $reward = collect(config('loyalty.rewards'))
-            ->sortBy('stamps')
-            ->first(fn (array $reward) => $reward['stamps'] > $card->total_stamps);
+        $reward = $rewards->first(fn (array $reward) => $reward['stamps'] > $card->total_stamps);
 
         return $reward ? [
             'stamps' => $reward['stamps'],

@@ -1,0 +1,241 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\LoyaltyReward;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Testing\TestResponse;
+use Tests\TestCase;
+
+/**
+ * Pengaturan → Program Promo, as pos-backend calls it: the stamp card on or
+ * off, and its rewards (loyalty_rewards) added, switched and renamed.
+ * Runs on pos_live_raw inside a rolled-back transaction.
+ */
+class PosProgramApiTest extends TestCase
+{
+    use DatabaseTransactions;
+
+    private const TOKEN = 'test-pos-token';
+
+    private int $orderSequence = 0;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config([
+            'loyalty.pos_api_token' => self::TOKEN,
+            'loyalty.stamps_per_card' => 10,
+            'loyalty.stamp_min_order_total' => 100000,
+            'loyalty.max_stamps_per_day' => 1,
+        ]);
+    }
+
+    public function test_the_program_lists_its_rules_and_rewards(): void
+    {
+        $this->getJson('/api/pos/program')->assertUnauthorized();
+
+        $this->api('get', '/api/pos/program')
+            ->assertOk()
+            ->assertJson([
+                'code' => 'stamp_card',
+                'name' => 'Stamp Card',
+                'active' => true,
+                'rules' => ['min_order_total' => 100000, 'stamps_per_card' => 10, 'max_stamps_per_day' => 1],
+                'rewards' => [
+                    ['stamps' => 5, 'label' => 'Minuman gratis', 'short' => 'Minuman', 'active' => true],
+                    ['stamps' => 10, 'label' => 'Makanan gratis', 'short' => 'Makanan', 'active' => true],
+                ],
+            ]);
+    }
+
+    public function test_switched_off_no_order_earns_a_stamp_and_no_reward_is_handed_over(): void
+    {
+        $phone = '080000000301';
+        $this->stampOrders($phone, 5);
+
+        $this->api('put', '/api/pos/program', ['active' => false])->assertOk()->assertJson(['active' => false]);
+
+        $this->api('post', '/api/pos/stamps', ['order_id' => $this->posOrder(['customer_phone' => $phone])])
+            ->assertUnprocessable()
+            ->assertJson(['reason' => 'program_inactive', 'message' => 'Program Stamp Card sedang tidak aktif.']);
+        $this->api('get', "/api/pos/customers/{$phone}")
+            ->assertJson(['program_active' => false, 'ready_rewards' => [], 'card' => ['stamps' => 5]]);
+        $this->api('get', '/api/pos/customers/080000000399')
+            ->assertJson(['registered' => false, 'program_active' => false]);
+        $this->api('post', '/api/pos/redemptions', ['phone' => $phone, 'reward_stamps' => 5])
+            ->assertUnprocessable()
+            ->assertJson(['reason' => 'program_inactive']);
+
+        // The stamps stay: switched back on, the reward is ready again.
+        $this->api('put', '/api/pos/program', ['active' => true])->assertOk()->assertJson(['active' => true]);
+        $this->api('get', "/api/pos/customers/{$phone}")
+            ->assertJson(['program_active' => true, 'ready_rewards' => [['stamps' => 5, 'count' => 1]]]);
+    }
+
+    public function test_switched_back_on_only_orders_from_then_on_count(): void
+    {
+        $phone = '080000000302';
+        $this->api('put', '/api/pos/program', ['active' => false]);
+        $whileOff = $this->posOrder(['customer_phone' => $phone, 'order_date' => now()->subMinutes(5)]);
+
+        $this->api('put', '/api/pos/program', ['active' => true]);
+
+        $this->api('post', '/api/pos/stamps', ['order_id' => $whileOff])
+            ->assertUnprocessable()
+            ->assertJson(['reason' => 'before_program']);
+        $this->artisan('loyalty:sync-stamps')->assertSuccessful();
+        $this->assertDatabaseMissing('loyalty_stamps', ['order_id' => $whileOff]);
+
+        $this->api('post', '/api/pos/stamps', [
+            'order_id' => $this->posOrder(['customer_phone' => $phone, 'order_date' => now()->addMinute()]),
+        ])->assertCreated();
+    }
+
+    public function test_a_reward_switched_off_is_neither_ready_nor_next_nor_redeemable(): void
+    {
+        $phone = '080000000303';
+        $this->stampOrders($phone, 5);
+        $drink = LoyaltyReward::query()->where('stamps_required', 5)->sole();
+
+        $this->api('put', "/api/pos/rewards/{$drink->id}", ['active' => false])
+            ->assertOk()
+            ->assertJsonPath('rewards.0.active', false);
+
+        $this->api('get', "/api/pos/customers/{$phone}")
+            ->assertJson(['ready_rewards' => [], 'next_reward' => ['stamps' => 10, 'label' => 'Makanan gratis']]);
+        $this->api('post', '/api/pos/redemptions', ['phone' => $phone, 'reward_stamps' => 5])
+            ->assertUnprocessable()
+            ->assertJson(['reason' => 'unknown_reward']);
+    }
+
+    public function test_a_reward_is_linked_to_the_promo_menu_tukar_gives(): void
+    {
+        $menuId = (int) DB::table('menu_items')->value('id');
+        $drink = LoyaltyReward::query()->where('stamps_required', 5)->sole();
+
+        $this->api('put', "/api/pos/rewards/{$drink->id}", ['promo_menu_item_id' => $menuId])
+            ->assertOk()
+            ->assertJsonPath('rewards.0.promo_menu_item_id', $menuId);
+        $this->api('put', "/api/pos/rewards/{$drink->id}", ['promo_menu_item_id' => 999999999])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('promo_menu_item_id');
+
+        // The cashier's Tukar knows which menu to put in the order.
+        $phone = '080000000305';
+        $this->stampOrders($phone, 5)
+            ->assertJson(['ready_rewards' => [['stamps' => 5, 'promo_menu_item_id' => $menuId]]]);
+
+        $this->api('put', "/api/pos/rewards/{$drink->id}", ['promo_menu_item_id' => null])
+            ->assertOk()
+            ->assertJsonPath('rewards.0.promo_menu_item_id', null);
+    }
+
+    public function test_a_reward_is_added_and_renamed_from_the_pos(): void
+    {
+        $this->api('post', '/api/pos/rewards', ['stamps' => 3, 'label' => 'Snack gratis', 'short' => 'Snack'])
+            ->assertCreated()
+            ->assertJsonPath('rewards.0', fn (array $reward) => $reward['stamps'] === 3
+                && $reward['label'] === 'Snack gratis' && $reward['active'] === true);
+
+        $this->api('post', '/api/pos/rewards', ['stamps' => 5, 'label' => 'Lagi'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['stamps' => 'Sudah ada hadiah untuk stamp ke-5.']);
+        $this->api('post', '/api/pos/rewards', ['stamps' => 11, 'label' => 'Terlalu jauh'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('stamps');
+
+        $snack = LoyaltyReward::query()->where('stamps_required', 3)->sole();
+        $this->api('put', "/api/pos/rewards/{$snack->id}", ['label' => 'Roti gratis', 'short' => 'Roti'])
+            ->assertOk()
+            ->assertJsonPath('rewards.0.label', 'Roti gratis');
+
+        // A new card at stamp 3 now has it ready.
+        $phone = '080000000304';
+        $this->stampOrders($phone, 3)->assertJson(['ready_rewards' => [['stamps' => 3, 'label' => 'Roti gratis']]]);
+    }
+
+    public function test_the_history_lists_the_rewards_handed_over_newest_first(): void
+    {
+        $this->getJson('/api/pos/redemptions')->assertUnauthorized();
+
+        $phone = '080000000311';
+        $cashier = DB::table('users')->first(['id', 'name']);
+        $this->stampOrders($phone, 10);
+        $orderId = $this->posOrder(['customer_phone' => $phone]);
+        $orderCode = DB::table('orders')->where('id', $orderId)->value('order_code');
+        $this->api('post', '/api/pos/redemptions', [
+            'phone' => $phone,
+            'reward_stamps' => 5,
+            'cashier_id' => $cashier->id,
+            'order_id' => $orderId,
+            'menu_name' => 'Loyalty Minuman (Americano)',
+        ])->assertCreated();
+        $this->travel(1)->minutes();
+        $this->api('post', '/api/pos/redemptions', ['phone' => $phone, 'reward_stamps' => 10])->assertCreated();
+
+        // Typed as the cashier types it; stored as 628...
+        $response = $this->api('get', '/api/pos/redemptions?q=0800-0000-0311&per_page=1')->assertOk();
+
+        $response->assertJsonPath('meta', ['page' => 1, 'per_page' => 1, 'total' => 2, 'last_page' => 2])
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.reward', ['stamps' => 10, 'label' => 'Makanan gratis'])
+            ->assertJsonPath('data.0.order', null)
+            ->assertJsonPath('data.0.cashier', null)
+            ->assertJsonPath('data.0.customer.phone', '6280000000311');
+
+        $this->api('get', '/api/pos/redemptions?q=080000000311&per_page=1&page=2')
+            ->assertOk()
+            ->assertJsonPath('data.0.reward', ['stamps' => 5, 'label' => 'Minuman gratis'])
+            ->assertJsonPath('data.0.menu_name', 'Loyalty Minuman (Americano)')
+            ->assertJsonPath('data.0.order', ['id' => $orderId, 'code' => $orderCode])
+            ->assertJsonPath('data.0.cashier', $cashier->name);
+
+        $code = $response->json('data.0.customer.code');
+        $this->api('get', '/api/pos/redemptions?q='.$code)->assertJsonPath('meta.total', 2);
+        $this->api('get', '/api/pos/redemptions?q=089999999999')->assertJsonPath('meta.total', 0);
+    }
+
+    private function api(string $method, string $uri, array $data = []): TestResponse
+    {
+        return $this->withToken(self::TOKEN)->json($method, $uri, $data);
+    }
+
+    /**
+     * Stamps $count orders of $phone, each on a day of its own; returns the last response.
+     */
+    private function stampOrders(string $phone, int $count): TestResponse
+    {
+        $response = null;
+        for ($i = 0; $i < $count; $i++) {
+            $response = $this->api('post', '/api/pos/stamps', [
+                'order_id' => $this->posOrder([
+                    'customer_phone' => $phone,
+                    'order_date' => now()->subDays(100)->addDays($i),
+                ]),
+            ])->assertCreated();
+        }
+
+        return $response;
+    }
+
+    private function posOrder(array $overrides = []): int
+    {
+        $this->orderSequence++;
+
+        return DB::table('orders')->insertGetId([
+            'order_code' => 'PROGRAM-TEST-'.uniqid().'-'.$this->orderSequence,
+            'customer_name' => 'Pelanggan Uji',
+            'customer_phone' => null,
+            'order_type' => 'Offline',
+            'order_status' => 'In Progress',
+            'order_date' => now(),
+            'total' => 100000,
+            'tax' => 0,
+            'total_with_tax' => 100000,
+            ...$overrides,
+        ]);
+    }
+}

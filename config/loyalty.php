@@ -66,18 +66,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Rewards
+    | Rewards (starting list only)
     |--------------------------------------------------------------------------
     |
-    | The reward unlocked when a card reaches a number of stamps. Each one is
-    | redeemed on its own: the free drink at stamp 5 does not reset the card,
-    | stamps keep going to 10 for the free food.
+    | The rewards live in loyalty_rewards and are managed from the POS
+    | (Pengaturan → Program Promo: add, switch on/off, rename); this list only
+    | fills that table once, on the first migrate. Each reward is redeemed on
+    | its own: the free drink at stamp 5 does not reset the card.
     |
     | stamps: the stamp that unlocks it (its slot is marked on the card)
     | label:  full name, shown in the reward list
     | short:  one word, printed inside the reward slot
     |
-    | Display only for now: claiming a reward is not built yet.
+    | Claimed in the POS with the Kategori Promo menu marked for its stamp
+    | (a free promo whose coffee / rice bowl the cashier picks): redeemed when
+    | the order is saved, linked to the order and that promo menu.
     |
     */
 
