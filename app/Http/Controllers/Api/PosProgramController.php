@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\LoyaltyRedemption;
 use App\Models\LoyaltyReward;
+use App\Models\LoyaltyStamp;
 use App\Services\Loyalty\StampCardProgram;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -12,9 +13,9 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * /api/pos/program and /api/pos/rewards: Pengaturan → Program Promo in the
+ * /api/pos/program and /api/pos/rewards: Pengaturan → Stamp Card in the
  * POS (pos-backend lets admins only). Every answer is the whole program,
- * except the redemption history (GET /api/pos/redemptions).
+ * except the histories (GET /api/pos/stamps and /api/pos/redemptions).
  */
 class PosProgramController extends Controller
 {
@@ -142,6 +143,64 @@ class PosProgramController extends Controller
                     ? ['id' => (int) $redemption->order_id, 'code' => $redemption->order?->order_code]
                     : null,
                 'cashier' => $redemption->redeemedBy?->name,
+            ])->values(),
+            'meta' => [
+                'page' => $page->currentPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+                'last_page' => $page->lastPage(),
+            ],
+        ]);
+    }
+
+    /**
+     * GET /api/pos/stamps?page=&per_page=&q=: the stamps given, newest
+     * first, with the order that earned each and its cashier. A stamp whose
+     * order the POS deleted keeps the order code; one given without an order
+     * (loyalty:give-stamps) has none.
+     */
+    public function stamps(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'q' => ['sometimes', 'nullable', 'string', 'max:50'],
+        ]);
+        $search = trim((string) ($data['q'] ?? ''));
+
+        $page = LoyaltyStamp::query()
+            ->with([
+                'card:id,loyalty_customer_id,card_number',
+                'card.customer:id,customer_code,customer_name,phone_number',
+                'order:id,order_code',
+                'createdBy:id,name',
+            ])
+            ->when($search !== '', fn ($query) => $query->whereHas(
+                'card.customer',
+                fn ($customer) => $this->matchCustomer($customer, $search),
+            ))
+            ->orderByDesc('stamped_at')
+            ->orderByDesc('id')
+            ->paginate($data['per_page'] ?? 20, ['*'], 'page', $data['page'] ?? 1);
+
+        return response()->json([
+            'data' => $page->getCollection()->map(fn (LoyaltyStamp $stamp) => [
+                'id' => $stamp->id,
+                'stamped_at' => $stamp->stamped_at?->toIso8601String(),
+                'stamp_number' => $stamp->stamp_number,
+                'card_number' => $stamp->card?->card_number,
+                'customer' => [
+                    'code' => $stamp->card?->customer?->customer_code,
+                    'name' => $stamp->card?->customer?->customer_name,
+                    'phone' => $stamp->card?->customer?->phone_number,
+                ],
+                'order' => $stamp->order_id || $stamp->order_code
+                    ? [
+                        'id' => $stamp->order_id ? (int) $stamp->order_id : null,
+                        'code' => $stamp->order?->order_code ?? $stamp->order_code,
+                    ]
+                    : null,
+                'cashier' => $stamp->createdBy?->name,
             ])->values(),
             'meta' => [
                 'page' => $page->currentPage(),

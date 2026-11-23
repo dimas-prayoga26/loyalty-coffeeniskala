@@ -198,6 +198,40 @@ class PosProgramApiTest extends TestCase
         $this->api('get', '/api/pos/redemptions?q=089999999999')->assertJsonPath('meta.total', 0);
     }
 
+    public function test_the_stamp_history_lists_the_stamps_given_newest_first(): void
+    {
+        $this->getJson('/api/pos/stamps')->assertUnauthorized();
+
+        $phone = '080000000321';
+        $cashier = DB::table('users')->first(['id', 'name']);
+        $this->stampOrders($phone, 2);
+        $orderId = $this->posOrder(['customer_phone' => $phone]);
+        $orderCode = DB::table('orders')->where('id', $orderId)->value('order_code');
+        $this->api('post', '/api/pos/stamps', ['order_id' => $orderId, 'cashier_id' => $cashier->id])->assertCreated();
+
+        // Typed as the cashier types it; stored as 628...
+        $response = $this->api('get', '/api/pos/stamps?q=0800-0000-0321&per_page=2')->assertOk();
+
+        $response->assertJsonPath('meta', ['page' => 1, 'per_page' => 2, 'total' => 3, 'last_page' => 2])
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.stamp_number', 3)
+            ->assertJsonPath('data.0.order', ['id' => $orderId, 'code' => $orderCode])
+            ->assertJsonPath('data.0.cashier', $cashier->name)
+            ->assertJsonPath('data.0.customer.phone', '6280000000321')
+            ->assertJsonPath('data.1.stamp_number', 2)
+            ->assertJsonPath('data.1.cashier', null);
+        $this->assertStringEndsWith('-01', $response->json('data.0.card_number'));
+
+        // The POS deleted the order: its code stays.
+        DB::table('orders')->where('id', $orderId)->delete();
+        $this->api('get', '/api/pos/stamps?q=080000000321&per_page=1')
+            ->assertJsonPath('data.0.order', ['id' => null, 'code' => $orderCode]);
+
+        $code = $response->json('data.0.customer.code');
+        $this->api('get', '/api/pos/stamps?q='.$code)->assertJsonPath('meta.total', 3);
+        $this->api('get', '/api/pos/stamps?q=089999999999')->assertJsonPath('meta.total', 0);
+    }
+
     private function api(string $method, string $uri, array $data = []): TestResponse
     {
         return $this->withToken(self::TOKEN)->json($method, $uri, $data);

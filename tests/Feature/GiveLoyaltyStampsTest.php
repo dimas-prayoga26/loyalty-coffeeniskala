@@ -22,6 +22,8 @@ class GiveLoyaltyStampsTest extends TestCase
         parent::setUp();
 
         config(['loyalty.stamps_per_card' => 10]);
+        // Whatever LOYALTY_TEST_NUMBERS the local .env holds.
+        WhatsAppNumber::allowTestNumbers([]);
     }
 
     protected function tearDown(): void

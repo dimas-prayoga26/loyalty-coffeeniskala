@@ -25,6 +25,8 @@ Route::prefix('pos')
         Route::put('/program', 'update');
         Route::post('/rewards', 'storeReward');
         Route::put('/rewards/{reward}', 'updateReward')->whereNumber('reward');
-        // The rewards handed over (POST /redemptions hands one over).
+        // The histories: stamps given (POST /stamps gives one) and rewards
+        // handed over (POST /redemptions hands one over).
+        Route::get('/stamps', 'stamps');
         Route::get('/redemptions', 'redemptions');
     });

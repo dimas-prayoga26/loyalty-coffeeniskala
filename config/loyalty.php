@@ -53,7 +53,7 @@ return [
 
     'stamp_order_types' => ['Offline'],
 
-    'stamp_min_order_total' => (int) env('LOYALTY_STAMP_MIN_ORDER_TOTAL', 100000),
+    'stamp_min_order_total' => (int) env('LOYALTY_STAMP_MIN_ORDER_TOTAL', 25000),
 
     // At most this many stamps per phone number per day, counted by the
     // order's date (Asia/Jakarta): a second order the same day earns none.
