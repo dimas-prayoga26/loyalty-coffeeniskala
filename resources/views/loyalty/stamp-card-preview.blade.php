@@ -23,6 +23,7 @@
                         :stamps="$sample['stamps']"
                         :status="$sample['status']"
                         :redeemed-rewards="$sample['redeemedRewards'] ?? []"
+                        :redeemed-at="$sample['redeemedAt'] ?? []"
                         :fresh-stamp="$sample['freshStamp'] ?? false"
                     />
                 </section>

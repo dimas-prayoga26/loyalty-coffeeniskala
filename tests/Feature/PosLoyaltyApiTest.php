@@ -83,7 +83,7 @@ class PosLoyaltyApiTest extends TestCase
                 'customer' => ['name' => 'Sinta', 'phone' => '6280000000202'],
                 'card' => ['stamps' => 1, 'slots' => 10, 'status' => 'active'],
                 'ready_rewards' => [],
-                'next_reward' => ['stamps' => 5, 'label' => 'Minuman gratis', 'remaining' => 4],
+                'next_reward' => ['stamps' => 5, 'label' => 'Roti Kukus gratis', 'remaining' => 4],
             ]);
 
         $stamp = LoyaltyStamp::query()->where('order_id', $orderId)->sole();
@@ -206,8 +206,8 @@ class PosLoyaltyApiTest extends TestCase
             ->assertJson([
                 'card' => ['number' => $first->card_number, 'stamps' => 10, 'status' => 'completed'],
                 'ready_rewards' => [
-                    ['stamps' => 5, 'label' => 'Minuman gratis', 'count' => 1],
-                    ['stamps' => 10, 'label' => 'Makanan gratis', 'count' => 1],
+                    ['stamps' => 5, 'label' => 'Roti Kukus gratis', 'count' => 1],
+                    ['stamps' => 10, 'label' => 'Minuman gratis', 'count' => 1],
                 ],
                 'next_reward' => null,
             ]);
@@ -241,7 +241,7 @@ class PosLoyaltyApiTest extends TestCase
         $redeem(5)
             ->assertCreated()
             ->assertJson([
-                'redeemed' => ['reward' => 'Minuman gratis', 'reward_stamps' => 5],
+                'redeemed' => ['reward' => 'Roti Kukus gratis', 'reward_stamps' => 5],
                 'card' => ['stamps' => 5, 'status' => 'active'],
                 'ready_rewards' => [],
             ]);
@@ -266,7 +266,7 @@ class PosLoyaltyApiTest extends TestCase
         ])
             ->assertCreated()
             ->assertJson(['redeemed' => [
-                'reward' => 'Minuman gratis',
+                'reward' => 'Roti Kukus gratis',
                 'order_id' => $order,
                 'menu_name' => 'Loyalty Minuman Gratis (Americano)',
             ]]);

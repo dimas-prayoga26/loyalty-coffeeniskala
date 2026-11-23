@@ -44,12 +44,13 @@ users (POS)       1──< loyalty_stamps.created_by, loyalty_redemptions.redeem
 ```
 
 - **`loyalty_customers.phone_number`**: UNIQUE, disimpan dalam bentuk ternormalisasi (`6281234567890`) oleh `App\Support\WhatsAppNumber`.
+- **`loyalty_customers.pin`**: hash bcrypt PIN pelanggan untuk `/verify`. `NULL` berarti masih PIN awal, yaitu 4 angka terakhir nomor HP (`6283123555526` → `5526`). Untuk reset PIN yang lupa, set kembali ke `NULL`.
 - **`loyalty_cards`**: setiap pelanggan maksimal punya 1 kartu aktif. Aturan ini dijaga database lewat kolom generated `active_flag` dan unique key.
 - **`loyalty_stamps.order_id`**: UNIQUE, sehingga satu order POS maksimal mendapat 1 stamp.
 
 ## Logic yang sudah ada
 
-`App\Services\Loyalty\LoyaltyRegistrationService::registerOrRetrieve($nomorWa, $nama, $email)` menjalankan alur pendaftaran:
+`App\Services\Loyalty\LoyaltyRegistrationService::registerOrRetrieve($nomorWa, $nama)` menjalankan alur pendaftaran:
 
 1. Normalisasi nomor WhatsApp.
 2. Jika nomor belum terdaftar: buat pelanggan baru dan kartu pertamanya.
@@ -63,12 +64,16 @@ Semua langkah berjalan dalam satu transaksi. Pendaftaran nomor yang sama secara 
 | Rute | Fungsi |
 |---|---|
 | `/` | Dialihkan ke `/verify` |
-| `GET /verify` | Form nomor HP dan Cloudflare Turnstile |
-| `POST /verify` | Mencocokkan nomor |
+| `GET /verify` | Langkah 1: form nomor HP dan Cloudflare Turnstile |
+| `POST /verify` | Mencari kartu untuk nomor itu, lalu lanjut ke PIN |
+| `GET /verify/pin` | Langkah 2: form PIN untuk nomor dari langkah 1 |
+| `POST /verify/pin` | Mencocokkan PIN |
 | `/verify-success/{customer_code}` | Kartu stamp pelanggan |
+| `POST /verify-success/{customer_code}/pin` | Mengganti PIN awal |
 
-Halaman membaca `loyalty_customers` dan memeriksa token Turnstile ke Cloudflare. Halaman kartu hanya terbuka di sesi browser yang memverifikasi nomornya, dan `POST /verify` dibatasi `throttle:10,1`. Yang tampil adalah kartu aktif, ditambah kartu penuh yang hadiahnya belum ditukar.
+Halaman membaca `loyalty_customers` dan memeriksa token Turnstile ke Cloudflare. Halaman kartu hanya terbuka di sesi browser yang memverifikasi nomornya, dan `POST /verify` serta `POST /verify/pin` dibatasi `throttle:10,1`. Yang tampil adalah kartu aktif, ditambah kartu penuh yang hadiahnya belum ditukar.
 
+- **PIN:** PIN awal adalah 4 angka terakhir nomor HP. Selama PIN awal masih dipakai, kartu tampil blur (tanpa tanggal stamp) dan pelanggan wajib membuat PIN baru dulu. PIN salah 5 kali mengunci nomor itu selama 15 menit.
 - **Verifikasi hanya mencari data, tidak mendaftarkan.** Nomor yang belum terdaftar ditolak dengan pesan. Pendaftaran tetap lewat kasir.
 - **Teks untuk pelanggan memakai "nomor HP", bukan "nomor WhatsApp" atau "didaftarkan".** Pelanggan tidak mendaftar sendiri; mereka hanya menyebutkan nomor HP ke kasir saat memesan.
 - **Tampilan form:** satu tema dengan kartu stamp (kelas `paper-card`). Nomor ditulis seperti pulpen di atas garis.
@@ -86,9 +91,9 @@ Halaman membaca `loyalty_customers` dan memeriksa token Turnstile ke Cloudflare.
 - **Logo:** bunga Niskala ada di `public/images/brand/niskala-logo.png`, dibuat dari `Logo Niskala.png` di proyek `andalan-migration`.
   - Tampil lewat `<x-brand.logo class="size-12 text-gold-500" />`. File PNG dipakai sebagai mask, jadi warnanya mengikuti warna teks.
   - `public/favicon.ico` dan `public/images/brand/apple-touch-icon.png` dibuat dari logo yang sama.
-- **Gambar stamp:** foto produk 400px WebP di `public/images/stamps/`. Urutan per slot diatur di `config/loyalty.php` (`stamp_images`), dan jumlah slot di `LOYALTY_STAMPS_PER_CARD`.
-- **Hadiah:** diatur di `config/loyalty.php` (`rewards`). Stamp ke-5 membuka **minuman gratis**, stamp ke-10 membuka **makanan gratis**.
-  - Kedua hadiah ditukar terpisah. Mengambil minuman gratis tidak mereset kartu; stamp tetap lanjut sampai 10.
+- **Gambar stamp:** foto produk 400px WebP di `public/images/stamps/`. Urutan per slot diatur di `config/loyalty.php` (`stamp_images`), dan jumlah slot di `LOYALTY_STAMPS_PER_CARD`. Slot 1–5 memakai foto roti kukus (hadiah stamp ke-5), slot 6–10 foto minuman (hadiah stamp ke-10).
+- **Hadiah:** tersimpan di tabel `loyalty_rewards` dan diatur dari POS (Pengaturan → Program Promo). `config/loyalty.php` (`rewards`) hanya daftar awal. Stamp ke-5 membuka **roti kukus gratis**, stamp ke-10 membuka **minuman gratis**.
+  - Kedua hadiah ditukar terpisah. Mengambil roti kukus gratis tidak mereset kartu; stamp tetap lanjut sampai 10.
   - Slot hadiah ditandai di kartu, dan di bawah grid ada daftar hadiah. Status tiap hadiah: *x stamp lagi*, *Siap ditukar*, atau *Sudah ditukar*.
   - Hadiah yang sudah diambil dikirim ke komponen lewat `:redeemed-rewards="[5]"`.
 - **Pratinjau:** semua keadaan kartu bisa dilihat di `/preview/stamp-card`. Rute ini hanya ada di environment `local`.

@@ -34,6 +34,17 @@ final class WhatsAppNumber
     }
 
     /**
+     * 6281234567890 -> 0812••••7890: enough for the customer to recognise
+     * their number, not enough to give it away.
+     */
+    public static function masked(string $stored): string
+    {
+        $local = str_starts_with($stored, self::INDONESIA) ? '0'.substr($stored, 2) : $stored;
+
+        return substr($local, 0, 4).'••••'.substr($local, -4);
+    }
+
+    /**
      * @param  iterable<string>  $numbers  as typed, e.g. "0987654321"; bad entries are ignored
      */
     public static function allowTestNumbers(iterable $numbers): void

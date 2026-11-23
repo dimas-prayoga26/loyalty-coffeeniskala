@@ -9,7 +9,10 @@ Route::redirect('/', '/verify');
 Route::controller(CustomerVerificationController::class)->group(function () {
     Route::get('/verify', 'create')->name('verify.create');
     Route::post('/verify', 'store')->middleware('throttle:10,1')->name('verify.store');
+    Route::get('/verify/pin', 'pinForm')->name('verify.pin.create');
+    Route::post('/verify/pin', 'confirmPin')->middleware('throttle:10,1')->name('verify.pin.store');
     Route::get('/verify-success/{customerCode}', 'success')->name('verify.success');
+    Route::post('/verify-success/{customerCode}/pin', 'updatePin')->middleware('throttle:10,1')->name('verify.pin');
 });
 
 // Design preview of the stamp card with sample data. Local only.
@@ -29,8 +32,8 @@ if (app()->isLocal()) {
                 'status' => LoyaltyCardStatus::Active,
             ],
             [
-                'title' => 'Hampir dapat minuman',
-                'description' => '4 stamp: tinggal 1 stamp lagi untuk minuman gratis.',
+                'title' => 'Hampir dapat roti kukus',
+                'description' => '4 stamp: tinggal 1 stamp lagi untuk roti kukus gratis.',
                 'customerName' => 'Andi Pratama',
                 'customerCode' => 'NSK-000005',
                 'cardNumber' => 'NSK-000005-01',
@@ -39,8 +42,8 @@ if (app()->isLocal()) {
                 'status' => LoyaltyCardStatus::Active,
             ],
             [
-                'title' => 'Minuman gratis terbuka',
-                'description' => 'Stamp ke-5 baru saja ditambahkan: minuman gratis siap ditukar.',
+                'title' => 'Roti kukus gratis terbuka',
+                'description' => 'Stamp ke-5 baru saja ditambahkan: roti kukus gratis siap ditukar.',
                 'customerName' => 'Budi Santoso',
                 'customerCode' => 'NSK-000001',
                 'cardNumber' => 'NSK-000001-01',
@@ -50,8 +53,8 @@ if (app()->isLocal()) {
                 'freshStamp' => true,
             ],
             [
-                'title' => 'Minuman sudah ditukar',
-                'description' => 'Minuman gratis sudah diambil, stamp lanjut menuju makanan gratis.',
+                'title' => 'Roti kukus sudah ditukar',
+                'description' => 'Roti kukus gratis sudah diambil, stamp lanjut menuju minuman gratis.',
                 'customerName' => 'Dewi Lestari',
                 'customerCode' => 'NSK-000004',
                 'cardNumber' => 'NSK-000004-01',
@@ -59,10 +62,11 @@ if (app()->isLocal()) {
                 'stamps' => $daysAgo(50, 43, 36, 29, 22, 12, 4),
                 'status' => LoyaltyCardStatus::Active,
                 'redeemedRewards' => [5],
+                'redeemedAt' => [5 => now()->subDays(20)->setTime(14, 35)],
             ],
             [
                 'title' => 'Kartu penuh',
-                'description' => 'Stamp ke-10 terkumpul: makanan gratis siap ditukar.',
+                'description' => 'Stamp ke-10 terkumpul: minuman gratis siap ditukar.',
                 'customerName' => 'Sista Ayu',
                 'customerCode' => 'NSK-000002',
                 'cardNumber' => 'NSK-000002-02',
@@ -70,6 +74,7 @@ if (app()->isLocal()) {
                 'stamps' => $daysAgo(62, 55, 48, 41, 33, 27, 20, 13, 7, 1),
                 'status' => LoyaltyCardStatus::Active,
                 'redeemedRewards' => [5],
+                'redeemedAt' => [5 => now()->subDays(30)->setTime(9, 12)],
             ],
             [
                 'title' => 'Sudah ditukar',
@@ -80,6 +85,7 @@ if (app()->isLocal()) {
                 'phone' => '6289876543210',
                 'stamps' => $daysAgo(140, 128, 119, 110, 101, 95, 88, 80, 71, 66),
                 'status' => LoyaltyCardStatus::Redeemed,
+                'redeemedAt' => [5 => now()->subDays(98)->setTime(16, 5), 10 => now()->subDays(64)->setTime(11, 48)],
             ],
         ]]);
     })->name('preview.stamp-card');

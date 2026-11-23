@@ -18,8 +18,10 @@ use Illuminate\Support\Facades\DB;
  * "loyalty:give-stamps 1234567890 5". The stamps are dated one per day
  * before today, so today's stamp is still open. Safe to run again: a number
  * whose open card already has N stamps (or a full one) is left as it is.
+ * --unredeemed first removes the rewards already handed over on that card,
+ * so a demo number can show its reward again.
  */
-#[Signature('loyalty:give-stamps {phone : Nomor HP pelanggan} {stamps : Jumlah stamp di kartunya} {--name= : Nama pelanggan (hanya untuk nomor baru)}')]
+#[Signature('loyalty:give-stamps {phone : Nomor HP pelanggan} {stamps : Jumlah stamp di kartunya} {--name= : Nama pelanggan (hanya untuk nomor baru)} {--unredeemed : Hadiah yang sudah ditukar di kartu itu dibuat belum ditukar}')]
 #[Description('Isi kartu stamp satu nomor sampai jumlah stamp tertentu (demo/tes)')]
 class GiveLoyaltyStamps extends Command
 {
@@ -40,6 +42,10 @@ class GiveLoyaltyStamps extends Command
             $this->error($e->getMessage());
 
             return self::FAILURE;
+        }
+
+        if ($this->option('unredeemed') && ($freed = $this->unredeem($phone)) > 0) {
+            $this->info("{$phone}: {$freed} hadiah dibuat belum ditukar.");
         }
 
         if ($card = $this->openCardWith($phone, $target)) {
@@ -70,6 +76,33 @@ class GiveLoyaltyStamps extends Command
             ->first();
 
         return $card && $card->total_stamps >= $target ? $card : null;
+    }
+
+    /**
+     * Deletes the redemptions on the customer's newest card that is not
+     * expired; a card closed because every reward was taken opens again.
+     */
+    private function unredeem(string $phone): int
+    {
+        $card = LoyaltyCustomer::query()->where('phone_number', $phone)->first()
+            ?->cards()
+            ->whereIn('status', [LoyaltyCardStatus::Active, LoyaltyCardStatus::Completed, LoyaltyCardStatus::Redeemed])
+            ->orderByDesc('id')
+            ->first();
+
+        if ($card === null) {
+            return 0;
+        }
+
+        return DB::transaction(function () use ($card): int {
+            $freed = $card->redemptions()->delete();
+
+            if ($card->status === LoyaltyCardStatus::Redeemed) {
+                $card->update(['status' => LoyaltyCardStatus::Completed]);
+            }
+
+            return $freed;
+        });
     }
 
     private function fill(int $cardId, int $target): int

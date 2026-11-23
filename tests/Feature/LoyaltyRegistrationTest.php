@@ -62,12 +62,10 @@ class LoyaltyRegistrationTest extends TestCase
 
     public function test_an_existing_customer_is_never_modified(): void
     {
-        $this->service->registerOrRetrieve('0800-0000-0003', 'Budi', 'budi@example.com');
-        $again = $this->service->registerOrRetrieve('0800-0000-0003', 'Someone Else', 'other@example.com');
+        $this->service->registerOrRetrieve('0800-0000-0003', 'Budi');
+        $again = $this->service->registerOrRetrieve('0800-0000-0003', 'Someone Else');
 
-        $customer = $again->customer->fresh();
-        $this->assertSame('Budi', $customer->customer_name);
-        $this->assertSame('budi@example.com', $customer->email);
+        $this->assertSame('Budi', $again->customer->fresh()->customer_name);
     }
 
     public function test_a_customer_without_an_active_card_gets_a_new_one(): void
@@ -87,12 +85,35 @@ class LoyaltyRegistrationTest extends TestCase
         $this->assertSame(2, $first->customer->cards()->count());
     }
 
-    public function test_blank_name_and_email_are_stored_as_null(): void
+    public function test_a_blank_name_is_stored_as_null(): void
     {
-        $result = $this->service->registerOrRetrieve('0800-0000-0005', '  ', '');
+        $result = $this->service->registerOrRetrieve('0800-0000-0005', '  ');
 
         $this->assertNull($result->customer->fresh()->customer_name);
-        $this->assertNull($result->customer->fresh()->email);
+    }
+
+    public function test_a_new_customer_starts_with_the_last_4_digits_of_the_number_as_pin(): void
+    {
+        $customer = $this->service->registerOrRetrieve('0800-0000-0006')->customer->fresh();
+
+        $this->assertNull($customer->pin);
+        $this->assertTrue($customer->hasDefaultPin());
+        $this->assertTrue($customer->checkPin('0006'));
+        $this->assertFalse($customer->checkPin('0007'));
+    }
+
+    public function test_a_changed_pin_is_stored_hashed_and_replaces_the_first_one(): void
+    {
+        $customer = $this->service->registerOrRetrieve('0800-0000-0007')->customer;
+
+        $customer->changePin('2468');
+        $customer = $customer->fresh();
+
+        $this->assertFalse($customer->hasDefaultPin());
+        $this->assertNotSame('2468', $customer->pin);
+        $this->assertTrue($customer->checkPin('2468'));
+        $this->assertFalse($customer->checkPin('0007'));
+        $this->assertArrayNotHasKey('pin', $customer->toArray());
     }
 
     public function test_an_invalid_number_creates_nothing(): void

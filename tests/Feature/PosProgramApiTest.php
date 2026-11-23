@@ -45,8 +45,8 @@ class PosProgramApiTest extends TestCase
                 'active' => true,
                 'rules' => ['min_order_total' => 100000, 'stamps_per_card' => 10, 'max_stamps_per_day' => 1],
                 'rewards' => [
-                    ['stamps' => 5, 'label' => 'Minuman gratis', 'short' => 'Minuman', 'active' => true],
-                    ['stamps' => 10, 'label' => 'Makanan gratis', 'short' => 'Makanan', 'active' => true],
+                    ['stamps' => 5, 'label' => 'Roti Kukus gratis', 'short' => 'Roti Kukus', 'active' => true],
+                    ['stamps' => 10, 'label' => 'Minuman gratis', 'short' => 'Minuman', 'active' => true],
                 ],
             ]);
     }
@@ -98,14 +98,14 @@ class PosProgramApiTest extends TestCase
     {
         $phone = '080000000303';
         $this->stampOrders($phone, 5);
-        $drink = LoyaltyReward::query()->where('stamps_required', 5)->sole();
+        $rotiKukus = LoyaltyReward::query()->where('stamps_required', 5)->sole();
 
-        $this->api('put', "/api/pos/rewards/{$drink->id}", ['active' => false])
+        $this->api('put', "/api/pos/rewards/{$rotiKukus->id}", ['active' => false])
             ->assertOk()
             ->assertJsonPath('rewards.0.active', false);
 
         $this->api('get', "/api/pos/customers/{$phone}")
-            ->assertJson(['ready_rewards' => [], 'next_reward' => ['stamps' => 10, 'label' => 'Makanan gratis']]);
+            ->assertJson(['ready_rewards' => [], 'next_reward' => ['stamps' => 10, 'label' => 'Minuman gratis']]);
         $this->api('post', '/api/pos/redemptions', ['phone' => $phone, 'reward_stamps' => 5])
             ->assertUnprocessable()
             ->assertJson(['reason' => 'unknown_reward']);
@@ -114,12 +114,12 @@ class PosProgramApiTest extends TestCase
     public function test_a_reward_is_linked_to_the_promo_menu_tukar_gives(): void
     {
         $menuId = (int) DB::table('menu_items')->value('id');
-        $drink = LoyaltyReward::query()->where('stamps_required', 5)->sole();
+        $rotiKukus = LoyaltyReward::query()->where('stamps_required', 5)->sole();
 
-        $this->api('put', "/api/pos/rewards/{$drink->id}", ['promo_menu_item_id' => $menuId])
+        $this->api('put', "/api/pos/rewards/{$rotiKukus->id}", ['promo_menu_item_id' => $menuId])
             ->assertOk()
             ->assertJsonPath('rewards.0.promo_menu_item_id', $menuId);
-        $this->api('put', "/api/pos/rewards/{$drink->id}", ['promo_menu_item_id' => 999999999])
+        $this->api('put', "/api/pos/rewards/{$rotiKukus->id}", ['promo_menu_item_id' => 999999999])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('promo_menu_item_id');
 
@@ -128,7 +128,7 @@ class PosProgramApiTest extends TestCase
         $this->stampOrders($phone, 5)
             ->assertJson(['ready_rewards' => [['stamps' => 5, 'promo_menu_item_id' => $menuId]]]);
 
-        $this->api('put', "/api/pos/rewards/{$drink->id}", ['promo_menu_item_id' => null])
+        $this->api('put', "/api/pos/rewards/{$rotiKukus->id}", ['promo_menu_item_id' => null])
             ->assertOk()
             ->assertJsonPath('rewards.0.promo_menu_item_id', null);
     }
@@ -181,14 +181,14 @@ class PosProgramApiTest extends TestCase
 
         $response->assertJsonPath('meta', ['page' => 1, 'per_page' => 1, 'total' => 2, 'last_page' => 2])
             ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.reward', ['stamps' => 10, 'label' => 'Makanan gratis'])
+            ->assertJsonPath('data.0.reward', ['stamps' => 10, 'label' => 'Minuman gratis'])
             ->assertJsonPath('data.0.order', null)
             ->assertJsonPath('data.0.cashier', null)
             ->assertJsonPath('data.0.customer.phone', '6280000000311');
 
         $this->api('get', '/api/pos/redemptions?q=080000000311&per_page=1&page=2')
             ->assertOk()
-            ->assertJsonPath('data.0.reward', ['stamps' => 5, 'label' => 'Minuman gratis'])
+            ->assertJsonPath('data.0.reward', ['stamps' => 5, 'label' => 'Roti Kukus gratis'])
             ->assertJsonPath('data.0.menu_name', 'Loyalty Minuman (Americano)')
             ->assertJsonPath('data.0.order', ['id' => $orderId, 'code' => $orderCode])
             ->assertJsonPath('data.0.cashier', $cashier->name);

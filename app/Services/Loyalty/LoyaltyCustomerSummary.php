@@ -7,6 +7,7 @@ use App\Models\LoyaltyCard;
 use App\Models\LoyaltyCustomer;
 use App\Models\LoyaltyRedemption;
 use App\Models\LoyaltyStamp;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
@@ -107,6 +108,7 @@ final class LoyaltyCustomerSummary
             'slots' => (int) config('loyalty.stamps_per_card'),
             'status' => $card->status,
             'redeemedRewards' => self::redeemedOn($card)->all(),
+            'redeemedAt' => self::redeemedAtOn($card)->all(),
         ]);
     }
 
@@ -189,5 +191,20 @@ final class LoyaltyCustomerSummary
             ->map(fn (LoyaltyRedemption $redemption) => $redemption->reward?->stamps_required)
             ->filter()
             ->values();
+    }
+
+    /**
+     * When each reward on the card was handed over, by its stamp number.
+     *
+     * @return Collection<int, Carbon>
+     */
+    private static function redeemedAtOn(LoyaltyCard $card): Collection
+    {
+        return $card->redemptions
+            ->filter(fn (LoyaltyRedemption $redemption) => $redemption->reward?->stamps_required && $redemption->redeemed_at)
+            ->sortBy('redeemed_at')
+            ->mapWithKeys(fn (LoyaltyRedemption $redemption) => [
+                (int) $redemption->reward->stamps_required => $redemption->redeemed_at,
+            ]);
     }
 }

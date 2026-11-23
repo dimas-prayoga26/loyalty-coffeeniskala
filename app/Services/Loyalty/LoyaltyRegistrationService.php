@@ -25,14 +25,13 @@ class LoyaltyRegistrationService
     public function registerOrRetrieve(
         string $whatsappNumber,
         ?string $customerName = null,
-        ?string $email = null,
     ): LoyaltyRegistrationResult {
         $phone = WhatsAppNumber::normalize($whatsappNumber);
 
         for ($attempt = 1; ; $attempt++) {
             try {
                 return DB::transaction(
-                    fn () => $this->resolve($phone, $customerName, $email),
+                    fn () => $this->resolve($phone, $customerName),
                     self::ATTEMPTS,
                 );
             } catch (UniqueConstraintViolationException $e) {
@@ -46,7 +45,7 @@ class LoyaltyRegistrationService
         }
     }
 
-    private function resolve(string $phone, ?string $customerName, ?string $email): LoyaltyRegistrationResult
+    private function resolve(string $phone, ?string $customerName): LoyaltyRegistrationResult
     {
         // The row lock serializes everything below per customer, so two
         // cashiers can't both issue a first card for the same person.
@@ -59,7 +58,7 @@ class LoyaltyRegistrationService
         $customer ??= LoyaltyCustomer::create([
             'phone_number' => $phone,
             'customer_name' => self::blankToNull($customerName),
-            'email' => self::blankToNull($email),
+            // pin stays NULL: the first PIN is the number's last 4 digits.
         ]);
 
         $card = $customer->activeCard()->lockForUpdate()->first();

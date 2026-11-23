@@ -6,8 +6,9 @@ use App\Rules\Turnstile;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * The Turnstile token is checked first: a bot gets no answer about whether
- * a number has a card.
+ * Step 1 of /verify: the phone number. The Turnstile token is checked
+ * first: a bot gets no answer about whether a number has a card. The PIN
+ * is asked on the next page (/verify/pin).
  */
 class VerifyCustomerRequest extends FormRequest
 {

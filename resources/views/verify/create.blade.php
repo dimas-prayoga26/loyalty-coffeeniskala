@@ -62,7 +62,7 @@
                 @enderror
 
                 <button type="submit" disabled data-verify-submit class="verify-card__submit">
-                    Lihat kartu saya
+                    Lanjut
                 </button>
             </div>
         </form>

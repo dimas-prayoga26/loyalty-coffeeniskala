@@ -79,21 +79,21 @@ return [
     | The rewards live in loyalty_rewards and are managed from the POS
     | (Pengaturan → Program Promo: add, switch on/off, rename); this list only
     | fills that table once, on the first migrate. Each reward is redeemed on
-    | its own: the free drink at stamp 5 does not reset the card.
+    | its own: the free roti kukus at stamp 5 does not reset the card.
     |
     | stamps: the stamp that unlocks it (its slot is marked on the card)
     | label:  full name, shown in the reward list
-    | short:  one word, printed inside the reward slot
+    | short:  one or two words, printed inside the reward slot
     |
     | Claimed in the POS with the Kategori Promo menu marked for its stamp
-    | (a free promo whose coffee / rice bowl the cashier picks): redeemed when
+    | (a free promo whose roti kukus / coffee the cashier picks): redeemed when
     | the order is saved, linked to the order and that promo menu.
     |
     */
 
     'rewards' => [
-        ['stamps' => 5, 'label' => 'Minuman gratis', 'short' => 'Minuman'],
-        ['stamps' => 10, 'label' => 'Makanan gratis', 'short' => 'Makanan'],
+        ['stamps' => 5, 'label' => 'Roti Kukus gratis', 'short' => 'Roti Kukus'],
+        ['stamps' => 10, 'label' => 'Minuman gratis', 'short' => 'Minuman'],
     ],
 
     /*
@@ -105,19 +105,22 @@ return [
     | first image goes in slot 1. A card with more slots than images repeats
     | the list. Files are 400px square WebP in public/images/stamps.
     |
+    | Slots 1-5 lead to the roti kukus (stamp 5), 6-10 to the drink (stamp
+    | 10), so each half shows its reward.
+    |
     */
 
     'stamp_images' => [
+        ['file' => 'images/stamps/roti-kukus-original-coklat.webp', 'label' => 'Roti Kukus Original Coklat'],
+        ['file' => 'images/stamps/roti-kukus-original-strawberry.webp', 'label' => 'Roti Kukus Original Strawberry'],
+        ['file' => 'images/stamps/roti-kukus-pandan-coklat.webp', 'label' => 'Roti Kukus Pandan Coklat'],
+        ['file' => 'images/stamps/roti-kukus-pandan-stroberi.webp', 'label' => 'Roti Kukus Pandan Stroberi'],
+        ['file' => 'images/stamps/roti-kukus-pandan-tiramisu.webp', 'label' => 'Roti Kukus Pandan Tiramisu'],
         ['file' => 'images/stamps/americano.webp', 'label' => 'Americano'],
         ['file' => 'images/stamps/aren-latte.webp', 'label' => 'Aren Latte'],
         ['file' => 'images/stamps/butterscotch-latte.webp', 'label' => 'Butterscotch Latte'],
         ['file' => 'images/stamps/matcha-latte.webp', 'label' => 'Matcha Latte'],
         ['file' => 'images/stamps/montblanc.webp', 'label' => 'Montblanc'],
-        ['file' => 'images/stamps/ayam-blackpepper.webp', 'label' => 'Ayam Blackpepper'],
-        ['file' => 'images/stamps/ayam-geprek-rice-bowl.webp', 'label' => 'Ayam Geprek Rice Bowl'],
-        ['file' => 'images/stamps/chicken-katsu-rice-bowl.webp', 'label' => 'Chicken Katsu Rice Bowl'],
-        ['file' => 'images/stamps/chicken-teriyaki-rice-bowl.webp', 'label' => 'Chicken Teriyaki Rice Bowl'],
-        ['file' => 'images/stamps/indomie-goreng-telur.webp', 'label' => 'Indomie Goreng Telur'],
     ],
 
 ];

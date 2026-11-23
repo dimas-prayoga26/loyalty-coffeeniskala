@@ -7,6 +7,7 @@ use App\Models\LoyaltyCard;
 use App\Models\LoyaltyCustomer;
 use App\Support\WhatsAppNumber;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -82,6 +83,36 @@ class GiveLoyaltyStampsTest extends TestCase
         $card = $this->cardOf('6280000000704');
         $this->assertSame(5, $card->total_stamps);
         $this->assertSame([1, 2, 3, 4, 5], $card->stamps()->orderBy('stamp_number')->pluck('stamp_number')->all());
+    }
+
+    public function test_unredeemed_hands_the_taken_rewards_back(): void
+    {
+        $this->artisan('loyalty:give-stamps', ['phone' => '0800-0000-0706', 'stamps' => 10])->assertSuccessful();
+        $card = $this->cardOf('6280000000706');
+        $redeem = fn (int $rewardId) => $card->redemptions()->create([
+            'loyalty_customer_id' => $card->loyalty_customer_id,
+            'reward_id' => $rewardId,
+            'redeemed_at' => now(),
+        ]);
+        $rewardIds = DB::table('loyalty_rewards')->pluck('id');
+
+        // Without the option a reward already taken stays taken.
+        $redeem($rewardIds->first());
+        $this->artisan('loyalty:give-stamps', ['phone' => '0800-0000-0706', 'stamps' => 10])->assertSuccessful();
+        $this->assertSame(1, $card->redemptions()->count());
+
+        // Every reward taken: the card was closed.
+        $rewardIds->skip(1)->each($redeem);
+        $card->update(['status' => LoyaltyCardStatus::Redeemed]);
+
+        $this->artisan('loyalty:give-stamps', ['phone' => '0800-0000-0706', 'stamps' => 10, '--unredeemed' => true])
+            ->assertSuccessful();
+
+        $card->refresh();
+        $this->assertFalse($card->redemptions()->exists());
+        $this->assertSame(LoyaltyCardStatus::Completed, $card->status);
+        $this->assertSame(10, $card->total_stamps);
+        $this->assertSame(1, LoyaltyCustomer::where('phone_number', '6280000000706')->sole()->cards()->count());
     }
 
     public function test_a_test_number_is_accepted_only_when_configured(): void

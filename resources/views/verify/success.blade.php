@@ -4,23 +4,111 @@
 
         <div class="mt-9">
             <h1 class="font-display text-2xl">Halo, {{ $customerName ?: 'Pelanggan Niskala' }}</h1>
-            <p class="mt-1.5 text-sm text-espresso-600 dark:text-cream-200/70">Ini kartu stamp Anda.</p>
+            <p class="mt-1.5 text-sm text-espresso-600 dark:text-cream-200/70">
+                {{ $locked ? 'Kartu stamp Anda terbuka setelah PIN diganti.' : 'Ini kartu stamp Anda.' }}
+            </p>
+            @if (session('status'))
+                <p class="page-note mt-4" role="status">{{ session('status') }}</p>
+            @endif
         </div>
 
-        {{-- Current card first, then full cards with a reward still to claim. --}}
-        @foreach ($cards as $card)
-            <x-loyalty.stamp-card
-                class="mt-6"
-                :customer-code="$card['customerCode']"
-                :card-number="$card['cardNumber']"
-                :customer-name="$card['customerName']"
-                :phone="$card['phone']"
-                :stamps="$card['stamps']"
-                :slots="$card['slots']"
-                :status="$card['status']"
-                :redeemed-rewards="$card['redeemedRewards']"
-            />
-        @endforeach
+        @if ($locked)
+            {{-- Still the first PIN: the print on the card is blurred and a
+                 slip on top asks for a new PIN. The controller sends no
+                 stamp dates for this view. --}}
+            <div class="pin-gate mt-6">
+                <div class="pin-gate__behind" aria-hidden="true" inert>
+                    @foreach ($cards as $card)
+                        <x-loyalty.stamp-card
+                            :customer-code="$card['customerCode']"
+                            :card-number="$card['cardNumber']"
+                            :customer-name="$card['customerName']"
+                            :phone="$card['phone']"
+                            :stamps="$card['stamps']"
+                            :slots="$card['slots']"
+                            :status="$card['status']"
+                            :redeemed-rewards="$card['redeemedRewards']"
+                            :redeemed-at="$card['redeemedAt'] ?? []"
+                        />
+                    @endforeach
+                </div>
+
+                <form
+                    method="POST"
+                    action="{{ route('verify.pin', $customerCode) }}"
+                    novalidate
+                    class="paper-card verify-card pin-gate__form"
+                    aria-labelledby="pin-title"
+                >
+                    @csrf
+
+                    <div class="paper-card__frame">
+                        <h2 id="pin-title" class="verify-card__title">Ganti PIN dulu</h2>
+                        <p class="verify-card__intro">
+                            PIN awal masih 4 angka terakhir nomor HP Anda. Ganti supaya kartu Anda aman.
+                        </p>
+
+                        <div class="pin-gate__fields">
+                            <div>
+                                <label for="new_pin" class="verify-card__label">PIN baru</label>
+                                <input
+                                    id="new_pin"
+                                    name="new_pin"
+                                    type="password"
+                                    inputmode="numeric"
+                                    pattern="[0-9]*"
+                                    autocomplete="new-password"
+                                    placeholder="4 angka"
+                                    maxlength="4"
+                                    required
+                                    class="verify-card__input verify-card__input--pin"
+                                    data-pin-input
+                                    @error('new_pin') aria-invalid="true" aria-describedby="new-pin-error" @enderror
+                                >
+                            </div>
+                            <div>
+                                <label for="new_pin_confirmation" class="verify-card__label">Ulangi PIN baru</label>
+                                <input
+                                    id="new_pin_confirmation"
+                                    name="new_pin_confirmation"
+                                    type="password"
+                                    inputmode="numeric"
+                                    pattern="[0-9]*"
+                                    autocomplete="new-password"
+                                    placeholder="4 angka"
+                                    maxlength="4"
+                                    required
+                                    class="verify-card__input verify-card__input--pin"
+                                    data-pin-input
+                                    @error('new_pin') aria-invalid="true" aria-describedby="new-pin-error" @enderror
+                                >
+                            </div>
+                        </div>
+                        @error('new_pin')
+                            <p id="new-pin-error" class="verify-card__error" role="alert">{{ $message }}</p>
+                        @enderror
+
+                        <button type="submit" class="verify-card__submit mt-6">Simpan PIN dan buka kartu</button>
+                    </div>
+                </form>
+            </div>
+        @else
+            {{-- Current card first, then full cards with a reward still to claim. --}}
+            @foreach ($cards as $card)
+                <x-loyalty.stamp-card
+                    class="mt-6"
+                    :customer-code="$card['customerCode']"
+                    :card-number="$card['cardNumber']"
+                    :customer-name="$card['customerName']"
+                    :phone="$card['phone']"
+                    :stamps="$card['stamps']"
+                    :slots="$card['slots']"
+                    :status="$card['status']"
+                    :redeemed-rewards="$card['redeemedRewards']"
+                    :redeemed-at="$card['redeemedAt'] ?? []"
+                />
+            @endforeach
+        @endif
 
         <p class="mt-8 text-center text-sm">
             <a

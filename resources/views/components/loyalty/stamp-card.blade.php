@@ -9,10 +9,11 @@
         card-number="NSK-000001-01"
         customer-name="Budi"            (optional)
         phone="6281234567890"           (optional, normalized form)
-        :stamps="$datesOfCollectedStamps" (Carbon|string, oldest first)
+        :stamps="$datesOfCollectedStamps" (Carbon|string, oldest first; null = date not shown)
         :slots="10"
         :status="$card->status"         (LoyaltyCardStatus or its value)
         :redeemed-rewards="[5]"         (stamp numbers whose reward was claimed)
+        :redeemed-at="[5 => $date]"     (optional: when each of those was handed over)
         :fresh-stamp="true"             (the newest sticker is placed last, slower)
         :rewards="[...]"                (optional, defaults to the program's rewards: Pengaturan → Program Promo)
     />
@@ -29,6 +30,7 @@
     'slots' => 10,
     'status' => \App\Enums\LoyaltyCardStatus::Active,
     'redeemedRewards' => [],
+    'redeemedAt' => [],
     'freshStamp' => false,
     'rewards' => null,
 ])
@@ -43,6 +45,7 @@
     $collected = min($stamps->count(), $slots);
     $images = config('loyalty.stamp_images');
     $redeemed = collect($redeemedRewards)->map(fn ($stamp) => (int) $stamp);
+    $redeemedAt = collect($redeemedAt)->filter()->map(fn ($date) => Carbon::parse($date)->locale(app()->getLocale()));
 
     // Each reward: locked -> ready (stamp reached) -> redeemed (claimed at
     // the cashier). A redeemed card has had all of them; on an expired card
@@ -80,12 +83,11 @@
     $formatDate = fn ($date) => Carbon::parse($date)->locale(app()->getLocale());
 
     // 6281234567890 -> 0812••••7890
-    $maskedPhone = null;
-    if (filled($phone)) {
-        $local = str_starts_with($phone, '62') ? '0'.substr($phone, 2) : $phone;
-        $maskedPhone = substr($local, 0, 4).'••••'.substr($local, -4);
-    }
+    $maskedPhone = filled($phone) ? \App\Support\WhatsAppNumber::masked($phone) : null;
     $identity = collect([$customerCode, $maskedPhone])->filter()->implode(' · ');
+
+    // One voucher per ready reward, unique on the page: voucher-NSK-000001-01-5.
+    $voucherId = fn (array $reward) => 'voucher-'.\Illuminate\Support\Str::slug($cardNumber).'-'.$reward['stamps'];
 
     $statusMessage = match (true) {
         $status === LoyaltyCardStatus::Redeemed => 'Semua hadiah ditukar',
@@ -130,12 +132,13 @@
                     $filled = $i < $collected;
                     $reward = $rewards->get($i + 1);
                     $image = $images[$i % count($images)];
-                    $date = $filled ? $formatDate($stamps[$i]) : null;
+                    $date = $filled && $stamps[$i] !== null ? $formatDate($stamps[$i]) : null;
+                    $day = $date?->translatedFormat('j F Y');
 
                     // Shown when the slot is tapped or hovered.
                     [$tipTitle, $tipText] = match (true) {
-                        $filled && $reward => ['Stamp ke-'.($i + 1).' · '.$reward['label'], $date->translatedFormat('j F Y').' · '.$reward['stateLabel']],
-                        $filled => ['Stamp ke-'.($i + 1), 'Terkumpul '.$date->translatedFormat('j F Y')],
+                        $filled && $reward => ['Stamp ke-'.($i + 1).' · '.$reward['label'], collect([$day, $reward['stateLabel']])->filter()->implode(' · ')],
+                        $filled => ['Stamp ke-'.($i + 1), trim('Terkumpul '.$day)],
                         $reward !== null => ['Stamp ke-'.($i + 1).' · '.$reward['label'], $reward['stateLabel']],
                         default => ['Stamp ke-'.($i + 1), 'Belum terkumpul'],
                     };
@@ -162,10 +165,10 @@
                                 </span>
                             @endif
                         </span>
-                        <span class="stamp-slot__date" aria-hidden="true">{{ $filled ? $date->format('j/n') : '' }}</span>
+                        <span class="stamp-slot__date" aria-hidden="true">{{ $date?->format('j/n') }}</span>
                         <span class="sr-only">
                             Stamp {{ $i + 1 }}{{ $reward ? ' (hadiah: '.$reward['label'].')' : '' }}:
-                            {{ $filled ? 'terkumpul '.$date->translatedFormat('j F Y') : 'belum terkumpul' }}
+                            {{ $filled ? trim('terkumpul '.$day) : 'belum terkumpul' }}
                         </span>
                     </button>
                     {{-- Visual repeat of the button's accessible name. --}}
@@ -186,13 +189,79 @@
                             <span class="reward-row__label">{{ $reward['label'] }}</span>
                             @if ($reward['state'] === 'ready')
                                 <span class="reward-row__hint">Tunjukkan ke kasir</span>
+                            @elseif ($reward['state'] === 'redeemed' && $redeemedAt->has($reward['stamps']))
+                                <span class="reward-row__hint">
+                                    Ditukar {{ $redeemedAt[$reward['stamps']]->translatedFormat('j F Y, H.i') }}
+                                </span>
                             @endif
                         </span>
                         <span class="reward-row__leader" aria-hidden="true"></span>
-                        <span class="reward-row__state">{{ $reward['stateLabel'] }}</span>
+                        @if ($reward['state'] === 'ready')
+                            {{-- The red rubber stamp is a button: it opens the voucher
+                                 the customer shows at the till (the QR will go there).
+                                 The slot's tip keeps "Siap ditukar". --}}
+                            <button
+                                type="button"
+                                class="reward-row__claim"
+                                popovertarget="{{ $voucherId($reward) }}"
+                            >
+                                <span class="reward-row__state">Tukar</span>
+                                <span class="sr-only">{{ $reward['label'] }}</span>
+                            </button>
+                        @else
+                            <span class="reward-row__state">{{ $reward['stateLabel'] }}</span>
+                        @endif
                     </li>
                 @endforeach
             </ul>
+
+            @foreach ($rewards->where('state', 'ready') as $reward)
+                <div
+                    id="{{ $voucherId($reward) }}"
+                    popover
+                    role="dialog"
+                    aria-labelledby="{{ $voucherId($reward) }}-title"
+                    class="reward-voucher"
+                >
+                    <div class="paper-card">
+                        <div class="paper-card__frame">
+                            <p class="reward-voucher__from">Kartu stamp No. {{ $cardNumber }}</p>
+                            <h2 id="{{ $voucherId($reward) }}-title" class="reward-voucher__title">{{ $reward['label'] }}</h2>
+                            <p class="reward-voucher__meta">Hadiah stamp ke-{{ $reward['stamps'] }}</p>
+
+                            {{-- Sample QR, the same fixed image on every voucher, until the
+                                 dynamic one (one code per reward, used once) is built. --}}
+                            <figure class="reward-voucher__qr">
+                                <img
+                                    src="{{ asset('images/qrcode_432127304_b7f3697f43008397d6d6947233558a6c.png') }}"
+                                    alt="Kode QR untuk menukar {{ $reward['label'] }}"
+                                    width="1000"
+                                    height="1000"
+                                >
+                            </figure>
+
+                            <div class="reward-voucher__owner">
+                                <p class="stamp-card__label">Pemilik kartu</p>
+                                <p class="stamp-card__owner">{{ $customerName ?: 'Pelanggan Niskala' }}</p>
+                                <p class="stamp-card__meta">{{ $identity }}</p>
+                            </div>
+
+                            <p class="reward-voucher__note">
+                                Tunjukkan kode QR ini ke kasir saat memesan. Kasir akan memberikan hadiahnya bersama pesanan Anda.
+                            </p>
+
+                            <button
+                                type="button"
+                                class="reward-voucher__close"
+                                popovertarget="{{ $voucherId($reward) }}"
+                                popovertargetaction="hide"
+                            >
+                                Tutup
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            @endforeach
         @endif
 
         <footer class="stamp-card__foot">
