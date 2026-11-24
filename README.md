@@ -46,6 +46,7 @@ users (POS)       1──< loyalty_stamps.created_by, loyalty_redemptions.redeem
 - **`loyalty_customers.phone_number`**: UNIQUE, disimpan dalam bentuk ternormalisasi (`6281234567890`) oleh `App\Support\WhatsAppNumber`.
 - **`loyalty_customers.pin`**: hash bcrypt PIN pelanggan untuk `/verify`. `NULL` berarti masih PIN awal, yaitu 4 angka terakhir nomor HP (`6283123555526` → `5526`). Untuk reset PIN yang lupa, set kembali ke `NULL`.
 - **`loyalty_cards`**: setiap pelanggan maksimal punya 1 kartu aktif. Aturan ini dijaga database lewat kolom generated `active_flag` dan unique key.
+- **`loyalty_cards.expires_at`**: kartu berlaku `LOYALTY_CARD_VALID_MONTHS` bulan (default 3) sejak stamp pertamanya terbit, yaitu `created_at` stamp itu (saat dicatat sistem), bukan tanggal order (`stamped_at`). Berlaku sampai pukul 23:59:59 di hari terakhir. Contoh: stamp pertama terbit 16 November → berlaku sampai 16 Februari 23:59:59. Kalau bulan tujuannya tidak punya tanggal itu, dipakai hari terakhir bulannya (30 November → 28 Februari). Kolom ini diisi saat stamp pertama diberikan; kartu tanpa stamp nilainya `NULL`. Untuk sekarang kolom ini hanya dicatat, belum memengaruhi stamp atau penukaran hadiah.
 - **`loyalty_stamps.order_id`**: UNIQUE, sehingga satu order POS maksimal mendapat 1 stamp.
 
 ## Logic yang sudah ada
@@ -70,10 +71,12 @@ Semua langkah berjalan dalam satu transaksi. Pendaftaran nomor yang sama secara 
 | `POST /verify/pin` | Mencocokkan PIN |
 | `/verify-success/{customer_code}` | Kartu stamp pelanggan |
 | `POST /verify-success/{customer_code}/pin` | Mengganti PIN awal |
+| `GET /verify-success/{customer_code}/pin` | Form ganti PIN (menu "Ganti PIN" di bawah kartu) |
+| `PUT /verify-success/{customer_code}/pin` | Mengganti PIN yang sudah pernah diganti, dengan PIN lama |
 
-Halaman membaca `loyalty_customers` dan memeriksa token Turnstile ke Cloudflare. Halaman kartu hanya terbuka di sesi browser yang memverifikasi nomornya, dan `POST /verify` serta `POST /verify/pin` dibatasi `throttle:10,1`. Yang tampil adalah kartu aktif, ditambah kartu penuh yang hadiahnya belum ditukar.
+Halaman membaca `loyalty_customers` dan memeriksa token Turnstile ke Cloudflare. Halaman kartu hanya terbuka di sesi browser yang memverifikasi nomornya, dan `POST /verify`, `POST /verify/pin`, serta kedua rute ganti PIN dibatasi `throttle:10,1`. Yang tampil adalah kartu aktif, ditambah kartu penuh yang hadiahnya belum ditukar.
 
-- **PIN:** PIN awal adalah 4 angka terakhir nomor HP. Selama PIN awal masih dipakai, kartu tampil blur (tanpa tanggal stamp) dan pelanggan wajib membuat PIN baru dulu. PIN salah 5 kali mengunci nomor itu selama 15 menit.
+- **PIN:** PIN awal adalah 4 angka terakhir nomor HP. Selama PIN awal masih dipakai, kartu tampil blur (tanpa tanggal stamp) dan pelanggan wajib membuat PIN baru dulu. Setelah itu PIN bisa diganti lagi lewat menu "Ganti PIN", dengan memasukkan PIN lama. PIN salah 5 kali (di langkah PIN maupun di form ganti PIN) mengunci nomor itu selama 15 menit.
 - **Verifikasi hanya mencari data, tidak mendaftarkan.** Nomor yang belum terdaftar ditolak dengan pesan. Pendaftaran tetap lewat kasir.
 - **Teks untuk pelanggan memakai "nomor HP", bukan "nomor WhatsApp" atau "didaftarkan".** Pelanggan tidak mendaftar sendiri; mereka hanya menyebutkan nomor HP ke kasir saat memesan.
 - **Tampilan form:** satu tema dengan kartu stamp (kelas `paper-card`). Nomor ditulis seperti pulpen di atas garis.
@@ -84,10 +87,11 @@ Halaman membaca `loyalty_customers` dan memeriksa token Turnstile ke Cloudflare.
 ### Tampilan kartu stamp
 
 - **Komponen:** `<x-loyalty.stamp-card>` di `resources/views/components/loyalty/stamp-card.blade.php`, dengan style di `resources/css/app.css`.
-- **Konsep:** kartu stamp kertas yang dicap barista. Hindari gradien, glow, dan efek 3D.
+- **Konsep:** kartu stamp kertas yang dicap barista. Hindari gradien, glow, dan efek 3D hiasan (tilt mengikuti kursor, kilau). Satu-satunya gerak 3D adalah membalik kartu, seperti kartu kertas yang dibalik.
   - Bagian cetak (lingkaran, teks, daftar hadiah) diam.
   - Yang ditambahkan orang bergerak: stiker produk ditempel satu per satu, tanggal ditulis pulpen (font Kalam), dan cap merah "Siap ditukar" dihentakkan terakhir.
-- **Interaksi:** tap atau hover slot untuk melihat keterangannya. Script-nya di `resources/js/stamp-card.js`; tanpa JS kartu tetap tampil lengkap.
+- **Interaksi:** tap atau hover slot untuk melihat keterangannya. Stiker produk bisa "dipegang": ditekan dan ditahan, stiker terangkat dari kartu; dilepas, stiker ditekan kembali sampai menempel. Script-nya di `resources/js/stamp-card.js`; tanpa JS kartu tetap tampil lengkap.
+- **Voucher di belakang kartu:** kartu yang punya hadiah *Siap ditukar* punya dua sisi. Voucher (QR) dicetak di belakang, dan tombol Tukar membalik kartu ke voucher hadiah itu. Ketuk sisi belakang (atau tekan Esc) untuk membaliknya lagi, dan kartu juga bisa dibalik dengan digeser ke samping. Tombol "Balik ke depan kartu" hanya untuk keyboard dan screen reader, dan baru terlihat saat difokus. Script-nya di `resources/js/card-flip.js`. Kartu tanpa hadiah siap ditukar hanya punya satu sisi dan tidak bisa dibalik. Tanpa JS, voucher tampil di bawah kartu.
 - **Logo:** bunga Niskala ada di `public/images/brand/niskala-logo.png`, dibuat dari `Logo Niskala.png` di proyek `andalan-migration`.
   - Tampil lewat `<x-brand.logo class="size-12 text-gold-500" />`. File PNG dipakai sebagai mask, jadi warnanya mengikuti warna teks.
   - `public/favicon.ico` dan `public/images/brand/apple-touch-icon.png` dibuat dari logo yang sama.

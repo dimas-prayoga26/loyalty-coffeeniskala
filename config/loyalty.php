@@ -29,6 +29,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Card Validity
+    |--------------------------------------------------------------------------
+    |
+    | A card is valid for this many months from when its first stamp is
+    | issued (recorded), up to the end of that day: first stamp issued 30
+    | November -> valid through 28 February. Stored in
+    | loyalty_cards.expires_at; a card without stamps has no expiry yet.
+    |
+    */
+
+    'card_valid_months' => (int) env('LOYALTY_CARD_VALID_MONTHS', 3),
+
+    /*
+    |--------------------------------------------------------------------------
     | POS API
     |--------------------------------------------------------------------------
     |
@@ -39,6 +53,20 @@ return [
     */
 
     'pos_api_token' => env('LOYALTY_POS_API_TOKEN', ''),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Reward Voucher QR
+    |--------------------------------------------------------------------------
+    |
+    | The QR on the back of a card changes every this many seconds (the
+    | customer's page fetches the new one). The cashier can scan the one
+    | shown now or the one just replaced; older ones (a screenshot) are
+    | refused.
+    |
+    */
+
+    'voucher_qr_seconds' => (int) env('LOYALTY_VOUCHER_QR_SECONDS', 60),
 
     /*
     |--------------------------------------------------------------------------

@@ -232,6 +232,44 @@ class PosProgramApiTest extends TestCase
         $this->api('get', '/api/pos/stamps?q=089999999999')->assertJsonPath('meta.total', 0);
     }
 
+    public function test_the_member_list_shows_every_stamp_each_member_has_earned(): void
+    {
+        $this->getJson('/api/pos/members')->assertUnauthorized();
+
+        // 12 stamps: a full first card (Roti Kukus handed over, the drink still
+        // to take) and 2 on the second. And a member with 3.
+        $this->stampOrders('080000000331', 12);
+        $this->api('post', '/api/pos/redemptions', ['phone' => '080000000331', 'reward_stamps' => 5])->assertCreated();
+        $this->stampOrders('080000000332', 3);
+
+        // Typed as the cashier types it; stored as 628...; most stamps first.
+        $response = $this->api('get', '/api/pos/members?q=08000000033')->assertOk();
+
+        $response->assertJsonPath('meta', ['page' => 1, 'per_page' => 20, 'total' => 2, 'last_page' => 1])
+            ->assertJsonPath('data.0.customer.phone', '6280000000331')
+            ->assertJsonPath('data.0.total_stamps', 12)
+            ->assertJsonPath('data.0.cards', 2)
+            ->assertJsonPath('data.0.card.stamps', 2)
+            ->assertJsonPath('data.0.card.status', 'active')
+            ->assertJsonPath('data.0.rewards_redeemed', 1)
+            ->assertJsonPath('data.0.rewards_ready', 1)
+            ->assertJsonPath('data.1.customer.phone', '6280000000332')
+            ->assertJsonPath('data.1.total_stamps', 3)
+            ->assertJsonPath('data.1.card', ['number' => $response->json('data.1.customer.code').'-01', 'stamps' => 3, 'slots' => 10, 'status' => 'active'])
+            ->assertJsonPath('data.1.rewards_redeemed', 0)
+            ->assertJsonPath('data.1.rewards_ready', 0);
+        $this->assertStringEndsWith('-02', $response->json('data.0.card.number'));
+        $this->assertNotNull($response->json('data.0.last_stamp_at'));
+
+        $this->api('get', '/api/pos/members?q='.$response->json('data.1.customer.code'))
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.total_stamps', 3);
+        $this->api('get', '/api/pos/members?q=08000000033&per_page=1&page=2')
+            ->assertJsonPath('meta.last_page', 2)
+            ->assertJsonPath('data.0.customer.phone', '6280000000332');
+        $this->api('get', '/api/pos/members?q=089999999999')->assertJsonPath('meta.total', 0);
+    }
+
     private function api(string $method, string $uri, array $data = []): TestResponse
     {
         return $this->withToken(self::TOKEN)->json($method, $uri, $data);

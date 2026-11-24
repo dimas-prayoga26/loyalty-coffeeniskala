@@ -12,6 +12,8 @@ Route::prefix('pos')
     ->controller(PosLoyaltyController::class)
     ->group(function () {
         Route::get('/customers/{phone}', 'customer')->where('phone', '[^/]+');
+        // The QR on the back of a stamp card, scanned at the till.
+        Route::get('/vouchers/{code}', 'voucher')->where('code', '[^/]+');
         Route::post('/stamps', 'stamp');
         Route::post('/redemptions', 'redeem');
     });
@@ -29,4 +31,6 @@ Route::prefix('pos')
         // handed over (POST /redemptions hands one over).
         Route::get('/stamps', 'stamps');
         Route::get('/redemptions', 'redemptions');
+        // The members, with all the stamps each has earned.
+        Route::get('/members', 'members');
     });

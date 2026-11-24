@@ -24,6 +24,8 @@
                         :status="$sample['status']"
                         :redeemed-rewards="$sample['redeemedRewards'] ?? []"
                         :redeemed-at="$sample['redeemedAt'] ?? []"
+                        {{-- Valid from the sample's first stamp, as a real card. --}}
+                        :expires-at="isset($sample['stamps'][0]) ? \App\Models\LoyaltyCard::expiryAfterFirstStamp($sample['stamps'][0]) : null"
                         :fresh-stamp="$sample['freshStamp'] ?? false"
                     />
                 </section>

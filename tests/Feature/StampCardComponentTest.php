@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Services\Loyalty\RewardVoucher;
 use Illuminate\Testing\TestView;
 use Tests\TestCase;
 
@@ -11,6 +12,14 @@ use Tests\TestCase;
  */
 class StampCardComponentTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Voucher QRs change every minute: one moment for the card and the test.
+        $this->freezeTime();
+    }
+
     /**
      * @param  list<string>  $stamps
      * @param  list<int>  $redeemedRewards
@@ -92,23 +101,55 @@ class StampCardComponentTest extends TestCase
             ->assertSee('Hadiah siap ditukar');
     }
 
-    public function test_tukar_opens_the_voucher_of_its_reward(): void
+    public function test_tukar_turns_the_card_over_to_the_voucher_on_its_back(): void
     {
         $this->card($this->stamps(5))
-            ->assertSee('popovertarget="voucher-nsk-000001-01-5"', false)
+            ->assertSee('data-card-flip="5"', false)
+            ->assertSee('aria-controls="voucher-nsk-000001-01-5"', false)
             ->assertSee('id="voucher-nsk-000001-01-5"', false)
-            ->assertSeeInOrder(['Kartu stamp No. NSK-000001-01', 'Roti Kukus gratis', 'Hadiah stamp ke-5', 'images/qrcode_', 'Budi', 'Tunjukkan kode QR ini ke kasir', 'Tutup'])
+            // The back stays out of reach until the card is turned over.
+            ->assertSee('data-card-back inert', false)
+            ->assertSeeInOrder([
+                'data-card-front', 'reward-row__state">Tukar<',
+                'data-card-back', 'Kartu stamp No. NSK-000001-01', 'Roti Kukus gratis', 'Hadiah stamp ke-5 · Budi',
+                'data-voucher-qr="'.RewardVoucher::code('NSK-000001-01', 5).'"',
+                'Tunjukkan kode QR ini ke kasir', 'Balik ke depan kartu',
+            ], false)
+            ->assertDontSee('popover', false)
             ->assertDontSee('voucher-nsk-000001-01-10', false);
+    }
+
+    public function test_each_ready_reward_has_its_own_voucher_qr(): void
+    {
+        $this->card($this->stamps(10))
+            ->assertSee('data-voucher-qr="'.RewardVoucher::code('NSK-000001-01', 5).'"', false)
+            ->assertSee('data-voucher-qr="'.RewardVoucher::code('NSK-000001-01', 10).'"', false)
+            ->assertDontSee('images/qrcode_', false);
+
+        $this->assertNotSame(RewardVoucher::code('NSK-000001-01', 5), RewardVoucher::code('NSK-000002-01', 5));
+    }
+
+    public function test_two_ready_rewards_share_the_back_with_the_first_voucher_showing(): void
+    {
+        $view = $this->card($this->stamps(10))
+            ->assertSee('data-card-flip="5"', false)
+            ->assertSee('data-card-flip="10"', false)
+            ->assertSeeInOrder(['data-voucher="5"', 'Roti Kukus gratis', 'data-voucher="10"', 'Minuman gratis'], false);
+
+        $this->assertMatchesRegularExpression('/data-voucher="10"\s+hidden/', (string) $view);
+        $this->assertDoesNotMatchRegularExpression('/data-voucher="5"\s+hidden/', (string) $view);
     }
 
     public function test_only_a_ready_reward_has_a_tukar_button(): void
     {
         $this->card($this->stamps(4))
             ->assertDontSee('reward-row__claim', false)
-            ->assertDontSee('popover', false);
+            ->assertDontSee('data-card-flipper', false)
+            ->assertDontSee('data-card-back', false);
 
         $this->card($this->stamps(7), redeemedRewards: [5])
-            ->assertDontSee('reward-row__claim', false);
+            ->assertDontSee('reward-row__claim', false)
+            ->assertDontSee('data-card-back', false);
     }
 
     public function test_a_redeemed_card_has_had_every_reward(): void
@@ -117,6 +158,33 @@ class StampCardComponentTest extends TestCase
             ->assertSee('Semua hadiah ditukar')
             ->assertSee('stamp-card__overlay', false)
             ->assertDontSee('Siap ditukar');
+    }
+
+    public function test_the_card_says_until_when_it_is_valid(): void
+    {
+        $this->blade(
+            '<x-loyalty.stamp-card customer-code="NSK-000001" card-number="NSK-000001-01"
+                :stamps="$stamps" expires-at="2027-02-19 23:59:59" />',
+            ['stamps' => $this->stamps(1)],
+        )->assertSeeInOrder(['No. NSK-000001-01', 'Berlaku s.d.', '19 Februari 2027']);
+    }
+
+    public function test_a_card_without_stamps_says_how_long_it_will_be_valid(): void
+    {
+        config(['loyalty.card_valid_months' => 3]);
+
+        $this->card([])
+            ->assertSee('Berlaku 3 bulan sejak stamp pertama')
+            ->assertDontSee('Berlaku s.d.');
+    }
+
+    public function test_a_card_whose_rewards_were_all_taken_shows_no_validity(): void
+    {
+        $this->blade(
+            '<x-loyalty.stamp-card customer-code="NSK-000001" card-number="NSK-000001-01"
+                :stamps="$stamps" status="redeemed" expires-at="2027-02-19 23:59:59" />',
+            ['stamps' => $this->stamps(10)],
+        )->assertDontSee('Berlaku');
     }
 
     public function test_rewards_beyond_the_card_are_left_out(): void

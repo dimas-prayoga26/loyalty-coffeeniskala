@@ -25,7 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // PINs are never put back into the session with the old input.
-        $exceptions->dontFlash(['pin', 'new_pin', 'new_pin_confirmation']);
+        $exceptions->dontFlash(['pin', 'current_pin', 'new_pin', 'new_pin_confirmation']);
 
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),

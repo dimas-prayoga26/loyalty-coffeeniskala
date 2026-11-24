@@ -14,12 +14,17 @@
         :status="$card->status"         (LoyaltyCardStatus or its value)
         :redeemed-rewards="[5]"         (stamp numbers whose reward was claimed)
         :redeemed-at="[5 => $date]"     (optional: when each of those was handed over)
+        :expires-at="$card->expires_at" (optional: last day the card is valid)
         :fresh-stamp="true"             (the newest sticker is placed last, slower)
         :rewards="[...]"                (optional, defaults to the program's rewards: Pengaturan → Program Promo)
     />
 
     Slot images come from config('loyalty.stamp_images'), in slot order.
     Tapping a slot shows its details (resources/js/stamp-card.js).
+
+    A card with a reward ready to claim has two sides: the voucher with the
+    QR is printed on the back, and TUKAR turns the card over to it
+    (resources/js/card-flip.js).
 --}}
 @props([
     'customerCode',
@@ -31,6 +36,7 @@
     'status' => \App\Enums\LoyaltyCardStatus::Active,
     'redeemedRewards' => [],
     'redeemedAt' => [],
+    'expiresAt' => null,
     'freshStamp' => false,
     'rewards' => null,
 ])
@@ -86,8 +92,19 @@
     $maskedPhone = filled($phone) ? \App\Support\WhatsAppNumber::masked($phone) : null;
     $identity = collect([$customerCode, $maskedPhone])->filter()->implode(' · ');
 
+    // Validity, the card's fine print at the bottom: the last day, written
+    // in with the first stamp; before any stamp, the printed rule. Not on a
+    // card whose rewards were all taken.
+    $validUntil = filled($expiresAt) && $status !== LoyaltyCardStatus::Redeemed ? $formatDate($expiresAt) : null;
+    $validityRule = $validUntil === null && $collected === 0 && $status === LoyaltyCardStatus::Active
+        ? 'Berlaku '.config('loyalty.card_valid_months').' bulan sejak stamp pertama'
+        : null;
+
     // One voucher per ready reward, unique on the page: voucher-NSK-000001-01-5.
     $voucherId = fn (array $reward) => 'voucher-'.\Illuminate\Support\Str::slug($cardNumber).'-'.$reward['stamps'];
+    // What its QR holds: signed, one per reward of this card, works once.
+    $voucherCode = fn (array $reward) => \App\Services\Loyalty\RewardVoucher::code($cardNumber, $reward['stamps']);
+    $readyRewards = $rewards->where('state', 'ready');
 
     $statusMessage = match (true) {
         $status === LoyaltyCardStatus::Redeemed => 'Semua hadiah ditukar',
@@ -105,8 +122,8 @@
 
 <article
     {{ $attributes->class([
-        'paper-card',
         'stamp-card',
+        'has-back' => $readyRewards->isNotEmpty(),
         'is-redeemed' => $status === LoyaltyCardStatus::Redeemed,
         'is-expired' => $status === LoyaltyCardStatus::Expired,
     ]) }}
@@ -114,172 +131,198 @@
     aria-label="Kartu stamp {{ $cardNumber }}"
     data-stamp-card
 >
-    <div class="paper-card__frame">
-        <header class="stamp-card__head">
-            <div class="min-w-0">
-                <p class="stamp-card__wordmark">NISKALA</p>
-                <p class="stamp-card__sub">Coffee</p>
-            </div>
-            <p class="stamp-card__number">
-                Kartu stamp
-                <span>No. {{ $cardNumber }}</span>
-            </p>
-        </header>
+    <div class="stamp-card__flipper" @if ($readyRewards->isNotEmpty()) data-card-flipper @endif>
+        <div class="paper-card stamp-card__face" data-card-front>
+            <div class="paper-card__frame">
+                <header class="stamp-card__head">
+                    <div class="min-w-0">
+                        <p class="stamp-card__wordmark">NISKALA</p>
+                        <p class="stamp-card__sub">Coffee</p>
+                    </div>
+                    <p class="stamp-card__number">
+                        Kartu stamp
+                        <span>No. {{ $cardNumber }}</span>
+                    </p>
+                </header>
 
-        <ol class="stamp-grid" aria-label="{{ $collected }} dari {{ $slots }} stamp terkumpul">
-            @for ($i = 0; $i < $slots; $i++)
-                @php
-                    $filled = $i < $collected;
-                    $reward = $rewards->get($i + 1);
-                    $image = $images[$i % count($images)];
-                    $date = $filled && $stamps[$i] !== null ? $formatDate($stamps[$i]) : null;
-                    $day = $date?->translatedFormat('j F Y');
+                <ol class="stamp-grid" aria-label="{{ $collected }} dari {{ $slots }} stamp terkumpul">
+                    @for ($i = 0; $i < $slots; $i++)
+                        @php
+                            $filled = $i < $collected;
+                            $reward = $rewards->get($i + 1);
+                            $image = $images[$i % count($images)];
+                            $date = $filled && $stamps[$i] !== null ? $formatDate($stamps[$i]) : null;
+                            $day = $date?->translatedFormat('j F Y');
 
-                    // Shown when the slot is tapped or hovered.
-                    [$tipTitle, $tipText] = match (true) {
-                        $filled && $reward => ['Stamp ke-'.($i + 1).' · '.$reward['label'], collect([$day, $reward['stateLabel']])->filter()->implode(' · ')],
-                        $filled => ['Stamp ke-'.($i + 1), trim('Terkumpul '.$day)],
-                        $reward !== null => ['Stamp ke-'.($i + 1).' · '.$reward['label'], $reward['stateLabel']],
-                        default => ['Stamp ke-'.($i + 1), 'Belum terkumpul'],
-                    };
-                @endphp
-                <li
-                    @class([
-                        'stamp-slot',
-                        'is-filled' => $filled,
-                        'is-reward' => $reward,
-                        'is-fresh' => $freshStamp && $filled && $i === $collected - 1,
-                    ])
-                    style="--tilt: {{ $tilts[$i % count($tilts)] }}deg; --i: {{ $i }}"
-                >
-                    <button type="button" class="stamp-slot__button">
-                        <span class="stamp-slot__spot" aria-hidden="true">
-                            @if ($reward)
-                                <span class="stamp-slot__free"><small>gratis</small>{{ $reward['short'] }}</span>
-                            @else
-                                <span class="stamp-slot__number">{{ $i + 1 }}</span>
-                            @endif
-                            @if ($filled)
-                                <span class="stamp-slot__sticker">
-                                    <img src="{{ asset($image['file']) }}" alt="" width="400" height="400" loading="lazy" decoding="async">
+                            // Shown when the slot is tapped or hovered.
+                            [$tipTitle, $tipText] = match (true) {
+                                $filled && $reward => ['Stamp ke-'.($i + 1).' · '.$reward['label'], collect([$day, $reward['stateLabel']])->filter()->implode(' · ')],
+                                $filled => ['Stamp ke-'.($i + 1), trim('Terkumpul '.$day)],
+                                $reward !== null => ['Stamp ke-'.($i + 1).' · '.$reward['label'], $reward['stateLabel']],
+                                default => ['Stamp ke-'.($i + 1), 'Belum terkumpul'],
+                            };
+                        @endphp
+                        <li
+                            @class([
+                                'stamp-slot',
+                                'is-filled' => $filled,
+                                'is-reward' => $reward,
+                                'is-fresh' => $freshStamp && $filled && $i === $collected - 1,
+                            ])
+                            style="--tilt: {{ $tilts[$i % count($tilts)] }}deg; --i: {{ $i }}"
+                        >
+                            <button type="button" class="stamp-slot__button">
+                                <span class="stamp-slot__spot" aria-hidden="true">
+                                    @if ($reward)
+                                        <span class="stamp-slot__free"><small>gratis</small>{{ $reward['short'] }}</span>
+                                    @else
+                                        <span class="stamp-slot__number">{{ $i + 1 }}</span>
+                                    @endif
+                                    @if ($filled)
+                                        <span class="stamp-slot__sticker">
+                                            <img src="{{ asset($image['file']) }}" alt="" width="400" height="400" loading="lazy" decoding="async">
+                                        </span>
+                                    @endif
                                 </span>
-                            @endif
-                        </span>
-                        <span class="stamp-slot__date" aria-hidden="true">{{ $date?->format('j/n') }}</span>
-                        <span class="sr-only">
-                            Stamp {{ $i + 1 }}{{ $reward ? ' (hadiah: '.$reward['label'].')' : '' }}:
-                            {{ $filled ? trim('terkumpul '.$day) : 'belum terkumpul' }}
-                        </span>
-                    </button>
-                    {{-- Visual repeat of the button's accessible name. --}}
-                    <span class="stamp-slot__tip" aria-hidden="true">
-                        <strong>{{ $tipTitle }}</strong>
-                        <span>{{ $tipText }}</span>
-                    </span>
-                </li>
-            @endfor
-        </ol>
-
-        @if ($rewards->isNotEmpty())
-            <ul class="reward-list" aria-label="Hadiah">
-                @foreach ($rewards as $reward)
-                    <li class="reward-row is-{{ $reward['state'] }}">
-                        <span class="reward-row__at" title="Stamp ke-{{ $reward['stamps'] }}">{{ $reward['stamps'] }}</span>
-                        <span class="reward-row__text">
-                            <span class="reward-row__label">{{ $reward['label'] }}</span>
-                            @if ($reward['state'] === 'ready')
-                                <span class="reward-row__hint">Tunjukkan ke kasir</span>
-                            @elseif ($reward['state'] === 'redeemed' && $redeemedAt->has($reward['stamps']))
-                                <span class="reward-row__hint">
-                                    Ditukar {{ $redeemedAt[$reward['stamps']]->translatedFormat('j F Y, H.i') }}
+                                <span class="stamp-slot__date" aria-hidden="true">{{ $date?->format('j/n') }}</span>
+                                <span class="sr-only">
+                                    Stamp {{ $i + 1 }}{{ $reward ? ' (hadiah: '.$reward['label'].')' : '' }}:
+                                    {{ $filled ? trim('terkumpul '.$day) : 'belum terkumpul' }}
                                 </span>
-                            @endif
-                        </span>
-                        <span class="reward-row__leader" aria-hidden="true"></span>
-                        @if ($reward['state'] === 'ready')
-                            {{-- The red rubber stamp is a button: it opens the voucher
-                                 the customer shows at the till (the QR will go there).
-                                 The slot's tip keeps "Siap ditukar". --}}
-                            <button
-                                type="button"
-                                class="reward-row__claim"
-                                popovertarget="{{ $voucherId($reward) }}"
-                            >
-                                <span class="reward-row__state">Tukar</span>
-                                <span class="sr-only">{{ $reward['label'] }}</span>
                             </button>
-                        @else
-                            <span class="reward-row__state">{{ $reward['stateLabel'] }}</span>
-                        @endif
-                    </li>
-                @endforeach
-            </ul>
+                            {{-- Visual repeat of the button's accessible name. --}}
+                            <span class="stamp-slot__tip" aria-hidden="true">
+                                <strong>{{ $tipTitle }}</strong>
+                                <span>{{ $tipText }}</span>
+                            </span>
+                        </li>
+                    @endfor
+                </ol>
 
-            @foreach ($rewards->where('state', 'ready') as $reward)
-                <div
-                    id="{{ $voucherId($reward) }}"
-                    popover
-                    role="dialog"
-                    aria-labelledby="{{ $voucherId($reward) }}-title"
-                    class="reward-voucher"
-                >
-                    <div class="paper-card">
-                        <div class="paper-card__frame">
+                @if ($rewards->isNotEmpty())
+                    <ul class="reward-list" aria-label="Hadiah">
+                        @foreach ($rewards as $reward)
+                            <li class="reward-row is-{{ $reward['state'] }}">
+                                <span class="reward-row__at" title="Stamp ke-{{ $reward['stamps'] }}">{{ $reward['stamps'] }}</span>
+                                <span class="reward-row__text">
+                                    <span class="reward-row__label">{{ $reward['label'] }}</span>
+                                    @if ($reward['state'] === 'ready')
+                                        <span class="reward-row__hint">Tunjukkan ke kasir</span>
+                                    @elseif ($reward['state'] === 'redeemed' && $redeemedAt->has($reward['stamps']))
+                                        <span class="reward-row__hint">
+                                            Ditukar {{ $redeemedAt[$reward['stamps']]->translatedFormat('j F Y, H.i') }}
+                                        </span>
+                                    @endif
+                                </span>
+                                <span class="reward-row__leader" aria-hidden="true"></span>
+                                @if ($reward['state'] === 'ready')
+                                    {{-- The red rubber stamp is a button: it turns the card
+                                         over to this reward's voucher on the back. The
+                                         slot's tip keeps "Siap ditukar". --}}
+                                    <button
+                                        type="button"
+                                        class="reward-row__claim"
+                                        data-card-flip="{{ $reward['stamps'] }}"
+                                        aria-controls="{{ $voucherId($reward) }}"
+                                        aria-expanded="false"
+                                    >
+                                        <span class="reward-row__state">Tukar</span>
+                                        <span class="sr-only">{{ $reward['label'] }}</span>
+                                    </button>
+                                @else
+                                    <span class="reward-row__state">{{ $reward['stateLabel'] }}</span>
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+
+                <footer class="stamp-card__foot">
+                    <div class="min-w-0">
+                        <p class="stamp-card__label">Pemilik kartu</p>
+                        <p class="stamp-card__owner">{{ $customerName ?: 'Pelanggan Niskala' }}</p>
+                        <p class="stamp-card__meta">{{ $identity }}</p>
+                    </div>
+                    <div class="shrink-0 text-right">
+                        <p class="stamp-card__count">{{ $collected }}<span>/{{ $slots }}</span></p>
+                        <p class="stamp-card__label mt-1">{{ $statusMessage }}</p>
+                    </div>
+                </footer>
+
+                {{-- The card's fine print: how long it is valid. --}}
+                @if ($validUntil)
+                    <p class="stamp-card__valid">
+                        Berlaku s.d.
+                        <span class="stamp-card__valid-date">{{ $validUntil->translatedFormat('j F Y') }}</span>
+                    </p>
+                @elseif ($validityRule)
+                    <p class="stamp-card__valid">{{ $validityRule }}</p>
+                @endif
+            </div>
+
+            @if ($overlay)
+                <div class="stamp-card__overlay" aria-hidden="true">
+                    <span class="stamp-card__overlay-label">{{ $overlay }}</span>
+                </div>
+            @endif
+        </div>
+
+        @if ($readyRewards->isNotEmpty())
+            {{-- The back of the card: the voucher the customer shows at the
+                 till, one per ready reward; TUKAR shows its own. Inert until
+                 the card is turned over. --}}
+            <div class="paper-card stamp-card__face stamp-card__back" data-card-back inert>
+                <div class="paper-card__frame">
+                    @foreach ($readyRewards as $reward)
+                        <section
+                            id="{{ $voucherId($reward) }}"
+                            class="reward-voucher"
+                            aria-labelledby="{{ $voucherId($reward) }}-title"
+                            data-voucher="{{ $reward['stamps'] }}" @unless ($loop->first) hidden @endunless
+                        >
                             <p class="reward-voucher__from">Kartu stamp No. {{ $cardNumber }}</p>
-                            <h2 id="{{ $voucherId($reward) }}-title" class="reward-voucher__title">{{ $reward['label'] }}</h2>
-                            <p class="reward-voucher__meta">Hadiah stamp ke-{{ $reward['stamps'] }}</p>
+                            <h2 id="{{ $voucherId($reward) }}-title" class="reward-voucher__title" tabindex="-1" data-voucher-title>
+                                {{ $reward['label'] }}
+                            </h2>
+                            <p class="reward-voucher__meta">
+                                Hadiah stamp ke-{{ $reward['stamps'] }} · {{ $customerName ?: 'Pelanggan Niskala' }}
+                            </p>
 
-                            {{-- Sample QR, the same fixed image on every voucher, until the
-                                 dynamic one (one code per reward, used once) is built. --}}
-                            <figure class="reward-voucher__qr">
-                                <img
-                                    src="{{ asset('images/qrcode_432127304_b7f3697f43008397d6d6947233558a6c.png') }}"
-                                    alt="Kode QR untuk menukar {{ $reward['label'] }}"
-                                    width="1000"
-                                    height="1000"
+                            {{-- The reward's own QR (RewardVoucher), drawn by
+                                 resources/js/voucher-qr.js and replaced every minute.
+                                 The cashier scans it in the POS; it stops working once
+                                 the reward is handed over. --}}
+                            <div class="reward-voucher__qr-slot">
+                                <figure
+                                    class="reward-voucher__qr"
+                                    role="img"
+                                    aria-label="Kode QR untuk menukar {{ $reward['label'] }}"
+                                    data-voucher-qr="{{ $voucherCode($reward) }}"
+                                    data-voucher-card="{{ $cardNumber }}"
+                                    data-voucher-stamps="{{ $reward['stamps'] }}"
                                 >
-                            </figure>
-
-                            <div class="reward-voucher__owner">
-                                <p class="stamp-card__label">Pemilik kartu</p>
-                                <p class="stamp-card__owner">{{ $customerName ?: 'Pelanggan Niskala' }}</p>
-                                <p class="stamp-card__meta">{{ $identity }}</p>
+                                    <noscript>
+                                        <span class="reward-voucher__code">{{ $voucherCode($reward) }}</span>
+                                    </noscript>
+                                </figure>
                             </div>
+                            {{-- "QR berganti dalam 42 detik", written by voucher-qr.js. --}}
+                            <p class="reward-voucher__timer" data-voucher-timer></p>
 
                             <p class="reward-voucher__note">
                                 Tunjukkan kode QR ini ke kasir saat memesan. Kasir akan memberikan hadiahnya bersama pesanan Anda.
                             </p>
 
-                            <button
-                                type="button"
-                                class="reward-voucher__close"
-                                popovertarget="{{ $voucherId($reward) }}"
-                                popovertargetaction="hide"
-                            >
-                                Tutup
+                            {{-- A tap anywhere on the back turns the card back. This
+                                 button is for keyboards and screen readers: hidden
+                                 until it gets keyboard focus. --}}
+                            <button type="button" class="reward-voucher__close">
+                                Balik ke depan kartu
                             </button>
-                        </div>
-                    </div>
+                        </section>
+                    @endforeach
                 </div>
-            @endforeach
+            </div>
         @endif
-
-        <footer class="stamp-card__foot">
-            <div class="min-w-0">
-                <p class="stamp-card__label">Pemilik kartu</p>
-                <p class="stamp-card__owner">{{ $customerName ?: 'Pelanggan Niskala' }}</p>
-                <p class="stamp-card__meta">{{ $identity }}</p>
-            </div>
-            <div class="shrink-0 text-right">
-                <p class="stamp-card__count">{{ $collected }}<span>/{{ $slots }}</span></p>
-                <p class="stamp-card__label mt-1">{{ $statusMessage }}</p>
-            </div>
-        </footer>
     </div>
-
-    @if ($overlay)
-        <div class="stamp-card__overlay" aria-hidden="true">
-            <span class="stamp-card__overlay-label">{{ $overlay }}</span>
-        </div>
-    @endif
 </article>

@@ -12,7 +12,11 @@ Route::controller(CustomerVerificationController::class)->group(function () {
     Route::get('/verify/pin', 'pinForm')->name('verify.pin.create');
     Route::post('/verify/pin', 'confirmPin')->middleware('throttle:10,1')->name('verify.pin.store');
     Route::get('/verify-success/{customerCode}', 'success')->name('verify.success');
+    // The reward QRs change every minute; the card page fetches the new ones.
+    Route::get('/verify-success/{customerCode}/vouchers', 'vouchers')->middleware('throttle:30,1')->name('verify.vouchers');
     Route::post('/verify-success/{customerCode}/pin', 'updatePin')->middleware('throttle:10,1')->name('verify.pin');
+    Route::get('/verify-success/{customerCode}/pin', 'editPin')->name('verify.pin.edit');
+    Route::put('/verify-success/{customerCode}/pin', 'replacePin')->middleware('throttle:10,1')->name('verify.pin.update');
 });
 
 // Design preview of the stamp card with sample data. Local only.

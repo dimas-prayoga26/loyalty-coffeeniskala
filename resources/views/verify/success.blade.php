@@ -29,6 +29,7 @@
                             :status="$card['status']"
                             :redeemed-rewards="$card['redeemedRewards']"
                             :redeemed-at="$card['redeemedAt'] ?? []"
+                            :expires-at="$card['expiresAt'] ?? null"
                         />
                     @endforeach
                 </div>
@@ -44,9 +45,6 @@
 
                     <div class="paper-card__frame">
                         <h2 id="pin-title" class="verify-card__title">Ganti PIN dulu</h2>
-                        <p class="verify-card__intro">
-                            PIN awal masih 4 angka terakhir nomor HP Anda. Ganti supaya kartu Anda aman.
-                        </p>
 
                         <div class="pin-gate__fields">
                             <div>
@@ -93,6 +91,14 @@
                 </form>
             </div>
         @else
+            {{-- The reward QRs change every minute: voucher-qr.js fetches the new ones. --}}
+            <div
+                hidden
+                data-voucher-refresh="{{ route('verify.vouchers', $customerCode) }}"
+                data-voucher-period="{{ \App\Services\Loyalty\RewardVoucher::period() }}"
+                data-voucher-refresh-in="{{ \App\Services\Loyalty\RewardVoucher::secondsLeft() }}"
+            ></div>
+
             {{-- Current card first, then full cards with a reward still to claim. --}}
             @foreach ($cards as $card)
                 <x-loyalty.stamp-card
@@ -106,11 +112,21 @@
                     :status="$card['status']"
                     :redeemed-rewards="$card['redeemedRewards']"
                     :redeemed-at="$card['redeemedAt'] ?? []"
+                    :expires-at="$card['expiresAt'] ?? null"
                 />
             @endforeach
         @endif
 
-        <p class="mt-8 text-center text-sm">
+        <p class="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-3 text-center text-sm">
+            {{-- The first PIN is changed in the slip on the card above. --}}
+            @unless ($locked)
+                <a
+                    href="{{ route('verify.pin.edit', $customerCode) }}"
+                    class="font-medium text-gold-500 underline decoration-gold-500/40 underline-offset-4 hover:decoration-gold-500 dark:text-gold-300 dark:decoration-gold-300/40"
+                >
+                    Ganti PIN
+                </a>
+            @endunless
             <a
                 href="{{ route('verify.create') }}"
                 class="font-medium text-gold-500 underline decoration-gold-500/40 underline-offset-4 hover:decoration-gold-500 dark:text-gold-300 dark:decoration-gold-300/40"

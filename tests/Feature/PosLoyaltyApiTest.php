@@ -6,6 +6,8 @@ use App\Enums\LoyaltyCardStatus;
 use App\Models\LoyaltyCard;
 use App\Models\LoyaltyStamp;
 use App\Models\Pos\PosUser;
+use App\Services\Loyalty\RewardVoucher;
+use App\Services\Loyalty\StampCardProgram;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
@@ -222,6 +224,29 @@ class PosLoyaltyApiTest extends TestCase
             ]);
     }
 
+    public function test_the_card_is_valid_for_three_months_from_its_first_stamps_issue(): void
+    {
+        $phone = '080000000215';
+
+        // An order of the 28th whose stamp is only issued on the 30th
+        // (sent late): the card counts from the issue.
+        $this->travelTo('2026-11-30 10:15:00');
+        $this->api('post', '/api/pos/stamps', [
+            'order_id' => $this->posOrder(['customer_phone' => $phone, 'order_date' => '2026-11-28 19:00:00']),
+        ])->assertCreated();
+
+        $card = LoyaltyCard::query()->whereHas('customer', fn ($q) => $q->where('phone_number', '6280000000215'))->sole();
+        // February has no 30th: valid through its last day.
+        $this->assertSame('2027-02-28 23:59:59', $card->expires_at->format('Y-m-d H:i:s'));
+
+        $this->travelTo('2026-12-20 16:00:00');
+        $this->api('post', '/api/pos/stamps', [
+            'order_id' => $this->posOrder(['customer_phone' => $phone, 'order_date' => '2026-12-20 16:00:00']),
+        ])->assertCreated();
+
+        $this->assertSame('2027-02-28 23:59:59', $card->refresh()->expires_at->format('Y-m-d H:i:s'));
+    }
+
     public function test_a_reward_is_redeemed_once_and_only_when_ready(): void
     {
         $phone = '080000000207';
@@ -298,6 +323,99 @@ class PosLoyaltyApiTest extends TestCase
         $this->api('post', '/api/pos/redemptions', ['phone' => '080000000209', 'reward_stamps' => 5])
             ->assertNotFound()
             ->assertJson(['reason' => 'not_registered']);
+    }
+
+    public function test_a_scanned_voucher_names_the_customer_and_its_reward(): void
+    {
+        $cardNumber = $this->stampOrders('080000000220', 5)->json('card.number');
+
+        $this->api('get', '/api/pos/vouchers/'.RewardVoucher::code($cardNumber, 5))
+            ->assertOk()
+            ->assertJson([
+                'status' => 'ready',
+                'ready' => true,
+                'message' => null,
+                'customer' => ['phone' => '6280000000220'],
+                'card_number' => $cardNumber,
+                'reward' => ['stamps' => 5, 'label' => 'Roti Kukus gratis'],
+            ]);
+
+        // Stamp 10 of the same card: a real voucher, not reached yet.
+        $this->api('get', '/api/pos/vouchers/'.RewardVoucher::code($cardNumber, 10))
+            ->assertOk()
+            ->assertJson(['status' => 'not_ready', 'ready' => false, 'message' => 'Hadiah ini belum bisa ditukar.']);
+    }
+
+    public function test_a_voucher_works_once(): void
+    {
+        $phone = '080000000221';
+        $cardNumber = $this->stampOrders($phone, 5)->json('card.number');
+
+        $this->api('post', '/api/pos/redemptions', ['phone' => $phone, 'reward_stamps' => 5])->assertCreated();
+
+        $this->api('get', '/api/pos/vouchers/'.RewardVoucher::code($cardNumber, 5))
+            ->assertOk()
+            ->assertJson(['status' => 'redeemed', 'ready' => false, 'message' => 'Hadiah ini sudah ditukar.']);
+    }
+
+    public function test_a_made_up_or_changed_voucher_is_refused(): void
+    {
+        $cardNumber = $this->stampOrders('080000000222', 5)->json('card.number');
+        $code = RewardVoucher::code($cardNumber, 5);
+        [$prefix, , , $slot, $signature] = explode('.', $code);
+
+        $refused = [
+            // The signature of stamp 5 on stamp 10.
+            "{$prefix}.{$cardNumber}.10.{$slot}.{$signature}",
+            // The signature of this minute on the next one.
+            "{$prefix}.{$cardNumber}.5.".($slot + 1).".{$signature}",
+            // One character of the signature changed.
+            substr($code, 0, -1).(str_ends_with($code, '0') ? '1' : '0'),
+            // Signed, but no such card.
+            RewardVoucher::code('NSK-999999-01', 5),
+            '6281234567890',
+            'bukan-voucher',
+        ];
+
+        foreach ($refused as $voucher) {
+            $this->api('get', '/api/pos/vouchers/'.$voucher)
+                ->assertNotFound()
+                ->assertJson(['reason' => 'invalid_voucher']);
+        }
+    }
+
+    public function test_a_voucher_qr_changes_every_minute_and_an_old_one_is_refused(): void
+    {
+        $cardNumber = $this->stampOrders('080000000224', 5)->json('card.number');
+
+        $this->travelTo('2026-11-24 10:00:15');
+        $shown = RewardVoucher::code($cardNumber, 5);
+        $this->assertSame(45, RewardVoucher::secondsLeft());
+
+        // The next minute: a new QR; the one just replaced still scans.
+        $this->travelTo('2026-11-24 10:01:05');
+        $next = RewardVoucher::code($cardNumber, 5);
+        $this->assertNotSame($shown, $next);
+        $this->api('get', '/api/pos/vouchers/'.$shown)->assertOk()->assertJson(['status' => 'ready']);
+
+        // Two minutes on (a screenshot): refused, the current one works.
+        $this->travelTo('2026-11-24 10:02:01');
+        $this->api('get', '/api/pos/vouchers/'.$shown)
+            ->assertUnprocessable()
+            ->assertJson(['reason' => 'voucher_replaced']);
+        $this->api('get', '/api/pos/vouchers/'.RewardVoucher::code($cardNumber, 5))
+            ->assertOk()
+            ->assertJson(['status' => 'ready', 'customer' => ['phone' => '6280000000224']]);
+    }
+
+    public function test_a_voucher_is_not_ready_while_the_stamp_card_is_off(): void
+    {
+        $cardNumber = $this->stampOrders('080000000223', 5)->json('card.number');
+        StampCardProgram::setActive(false);
+
+        $this->api('get', '/api/pos/vouchers/'.RewardVoucher::code($cardNumber, 5))
+            ->assertOk()
+            ->assertJson(['status' => 'program_inactive', 'ready' => false]);
     }
 
     public function test_sync_command_stamps_orders_the_pos_could_not_deliver(): void

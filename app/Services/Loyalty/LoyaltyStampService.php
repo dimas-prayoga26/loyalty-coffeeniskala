@@ -22,7 +22,8 @@ use RuntimeException;
  * repeat returns the stamp already given.
  *
  * A card that reaches stamps_per_card becomes Completed; the next stamp
- * goes on a new card (registerOrRetrieve issues it).
+ * goes on a new card (registerOrRetrieve issues it). A card's first stamp
+ * sets its expires_at (LoyaltyCard::expiryAfterFirstStamp()).
  *
  * A number earns at most max_stamps_per_day stamps on the order's day: the
  * next order that day is refused (daily_limit), whichever card it is on.
@@ -107,8 +108,8 @@ class LoyaltyStampService
 
         // Checked under the card lock: two orders of one number at once
         // can't both take the day's stamp.
-        $day = $order->order_date ?? now();
-        if (self::stampsOn($card->loyalty_customer_id, $day) >= self::maxStampsPerDay()) {
+        $stampedAt = $order->order_date ?? now();
+        if (self::stampsOn($card->loyalty_customer_id, $stampedAt) >= self::maxStampsPerDay()) {
             throw LoyaltyRuleException::dailyLimitReached();
         }
 
@@ -119,10 +120,13 @@ class LoyaltyStampService
             'order_code' => $order->order_code,
             'stamp_number' => $number,
             'created_by' => $cashierId,
-            'stamped_at' => $order->order_date ?? now(),
+            'stamped_at' => $stampedAt,
         ]);
 
         $card->total_stamps = $number;
+        if ($number === 1) {
+            $card->expires_at = LoyaltyCard::expiryAfterFirstStamp($stamp->created_at);
+        }
         if ($number >= config('loyalty.stamps_per_card')) {
             $card->status = LoyaltyCardStatus::Completed;
         }

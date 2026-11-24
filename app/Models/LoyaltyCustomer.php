@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Hash;
 
@@ -90,5 +91,15 @@ class LoyaltyCustomer extends Model
     public function redemptions(): HasMany
     {
         return $this->hasMany(LoyaltyRedemption::class);
+    }
+
+    /**
+     * Every stamp the customer has earned, on all their cards.
+     *
+     * @return HasManyThrough<LoyaltyStamp, LoyaltyCard, $this>
+     */
+    public function stamps(): HasManyThrough
+    {
+        return $this->hasManyThrough(LoyaltyStamp::class, LoyaltyCard::class);
     }
 }

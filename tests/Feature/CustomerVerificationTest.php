@@ -6,6 +6,7 @@ use App\Models\LoyaltyCustomer;
 use App\Models\LoyaltyRedemption;
 use App\Models\LoyaltyReward;
 use App\Services\Loyalty\LoyaltyRegistrationService;
+use App\Services\Loyalty\RewardVoucher;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -60,7 +61,7 @@ class CustomerVerificationTest extends TestCase
             ->assertSee('0800••••0301')
             ->assertSee('Ganti nomor')
             ->assertSee('name="pin"', false)
-            ->assertSee('4 angka terakhir nomor HP')
+            ->assertDontSee('Belum pernah ganti PIN')
             ->assertDontSee('name="phone"', false)
             ->assertDontSee('challenges.cloudflare.com', false);
     }
@@ -238,6 +239,212 @@ class CustomerVerificationTest extends TestCase
         $this->assertTrue(LoyaltyCustomer::where('customer_code', $code)->sole()->hasDefaultPin());
     }
 
+    public function test_the_card_page_links_to_changing_the_pin(): void
+    {
+        $code = $this->customerWithStamps('0800-0000-0301', null, 1, pin: '2468');
+        $this->verify('0800-0000-0301', '2468');
+
+        $this->get('/verify-success/'.$code)
+            ->assertOk()
+            ->assertSee('href="'.route('verify.pin.edit', $code).'"', false);
+    }
+
+    public function test_the_card_page_fetches_the_reward_qrs_of_the_minute(): void
+    {
+        $this->freezeTime();
+        $code = $this->customerWithStamps('0800-0000-0301', 'Sinta', 5, pin: '2468');
+        $this->verify('0800-0000-0301', '2468');
+        $cardNumber = LoyaltyCustomer::where('customer_code', $code)->sole()->cards()->sole()->card_number;
+
+        $this->get('/verify-success/'.$code)
+            ->assertOk()
+            ->assertSee('data-voucher-refresh="'.route('verify.vouchers', $code).'"', false)
+            ->assertSee('data-voucher-qr="'.RewardVoucher::code($cardNumber, 5).'"', false)
+            ->assertSee('data-voucher-timer', false);
+
+        $this->travel(61)->seconds();
+
+        $this->getJson('/verify-success/'.$code.'/vouchers')
+            ->assertOk()
+            ->assertJsonPath('period', 60)
+            ->assertJsonFragment([
+                'card_number' => $cardNumber,
+                'stamps' => 5,
+                'code' => RewardVoucher::code($cardNumber, 5),
+            ]);
+    }
+
+    public function test_the_reward_qrs_are_only_for_the_customer_who_opened_the_card(): void
+    {
+        $code = $this->customerWithStamps('0800-0000-0301', null, 5, pin: '2468');
+        $this->getJson('/verify-success/'.$code.'/vouchers')->assertForbidden();
+
+        // Still on the first PIN: the card is blurred, no QRs either.
+        $blurred = $this->customerWithStamps('0800-0000-0302', null, 5);
+        $this->verify('0800-0000-0302', '0302');
+        $this->getJson('/verify-success/'.$blurred.'/vouchers')->assertForbidden();
+    }
+
+    public function test_the_blurred_card_has_no_change_pin_link(): void
+    {
+        $code = $this->customerWithStamps('0800-0000-0301', null, 1);
+        $this->verify('0800-0000-0301', '0301');
+
+        $this->get('/verify-success/'.$code)
+            ->assertOk()
+            ->assertDontSee('href="'.route('verify.pin.edit', $code).'"', false);
+    }
+
+    public function test_the_change_pin_form_asks_the_old_pin_and_the_new_pin_twice(): void
+    {
+        $code = $this->customerWithStamps('0800-0000-0301', null, 1, pin: '2468');
+        $this->verify('0800-0000-0301', '2468');
+
+        $this->get('/verify-success/'.$code.'/pin')
+            ->assertOk()
+            ->assertSeeInOrder(['Ganti PIN', 'PIN lama', 'PIN baru', 'Ulangi PIN baru'])
+            ->assertSee('name="current_pin"', false)
+            ->assertSee('name="new_pin"', false)
+            ->assertSee('name="new_pin_confirmation"', false)
+            ->assertSee('name="_method" value="PUT"', false)
+            ->assertSee('href="'.route('verify.success', $code).'"', false)
+            ->assertSee('noindex', false)
+            ->assertHeader('Cache-Control', 'no-store, private');
+    }
+
+    public function test_the_change_pin_form_does_not_open_without_verifying_the_number(): void
+    {
+        $code = $this->customerWithStamps('0800-0000-0301', null, 1, pin: '2468');
+
+        $this->get('/verify-success/'.$code.'/pin')
+            ->assertRedirect('/verify')
+            ->assertSessionHas('status');
+
+        $this->replacePin($code, '2468', '1357')
+            ->assertRedirect('/verify')
+            ->assertSessionHas('status');
+
+        $this->assertTrue(LoyaltyCustomer::where('customer_code', $code)->sole()->checkPin('2468'));
+    }
+
+    public function test_a_first_pin_goes_back_to_the_card_instead_of_the_change_pin_form(): void
+    {
+        $code = $this->customerWithStamps('0800-0000-0301', null, 1);
+        $this->verify('0800-0000-0301', '0301');
+
+        $this->get('/verify-success/'.$code.'/pin')
+            ->assertRedirect('/verify-success/'.$code);
+
+        $this->replacePin($code, '0301', '1357')
+            ->assertRedirect('/verify-success/'.$code);
+
+        $this->assertTrue(LoyaltyCustomer::where('customer_code', $code)->sole()->hasDefaultPin());
+    }
+
+    public function test_changing_the_pin_with_the_old_pin_replaces_it(): void
+    {
+        $code = $this->customerWithStamps('0800-0000-0301', null, 1, pin: '2468');
+        $this->verify('0800-0000-0301', '2468');
+
+        $this->replacePin($code, '2468', '1357')
+            ->assertSessionHasNoErrors()
+            ->assertRedirect('/verify-success/'.$code)
+            ->assertSessionHas('status');
+
+        $customer = LoyaltyCustomer::where('customer_code', $code)->sole();
+        $this->assertTrue($customer->checkPin('1357'));
+        $this->assertFalse($customer->checkPin('2468'));
+
+        $this->get('/verify-success/'.$code)
+            ->assertOk()
+            ->assertSee('PIN baru tersimpan');
+    }
+
+    public function test_a_wrong_old_pin_keeps_the_pin_and_says_how_many_tries_are_left(): void
+    {
+        $code = $this->customerWithStamps('0800-0000-0301', null, 1, pin: '2468');
+        $this->verify('0800-0000-0301', '2468');
+
+        $this->replacePin($code, '1111', '1357')
+            ->assertSessionHasErrors(['current_pin' => 'PIN salah. Sisa 4 kali percobaan.'])
+            ->assertSessionMissing('_old_input.current_pin')
+            ->assertSessionMissing('_old_input.new_pin')
+            ->assertSessionMissing('_old_input.new_pin_confirmation');
+
+        $this->assertTrue(LoyaltyCustomer::where('customer_code', $code)->sole()->checkPin('2468'));
+    }
+
+    public function test_wrong_old_pins_lock_the_number_like_the_pin_step(): void
+    {
+        $code = $this->customerWithStamps('0800-0000-0301', null, 1, pin: '2468');
+        $this->verify('0800-0000-0301', '2468');
+
+        foreach (range(4, 1) as $left) {
+            $this->replacePin($code, '1111', '1357')
+                ->assertSessionHasErrors(['current_pin' => "PIN salah. Sisa {$left} kali percobaan."]);
+        }
+
+        $this->replacePin($code, '1111', '1357')
+            ->assertSessionHasErrors(['current_pin' => 'PIN salah terlalu sering. Coba lagi dalam 15 menit.']);
+
+        // The lock is the number's: the PIN step waits too, even for the right PIN.
+        $this->verify('0800-0000-0301', '2468')
+            ->assertSessionHasErrors(['pin' => 'PIN salah terlalu sering. Coba lagi dalam 15 menit.']);
+    }
+
+    public function test_the_change_pin_form_refuses_an_invalid_new_pin(): void
+    {
+        $code = $this->customerWithStamps('0800-0000-0301', null, 1, pin: '2468');
+        $this->verify('0800-0000-0301', '2468');
+
+        $this->put('/verify-success/'.$code.'/pin', [])
+            ->assertSessionHasErrors([
+                'current_pin' => 'Tulis PIN lama Anda.',
+                'new_pin' => 'Tulis PIN baru Anda.',
+            ]);
+
+        $this->replacePin($code, '24', '1357')
+            ->assertSessionHasErrors(['current_pin' => 'PIN lama berupa 4 angka.']);
+
+        $this->replacePin($code, '2468', '12a4')
+            ->assertSessionHasErrors(['new_pin' => 'PIN baru berupa 4 angka.']);
+
+        $this->replacePin($code, '2468', '1357', '1358')
+            ->assertSessionHasErrors(['new_pin' => 'Kedua PIN tidak sama. Tulis ulang keduanya.']);
+
+        $this->replacePin($code, '2468', '2468')
+            ->assertSessionHasErrors(['new_pin' => 'PIN baru harus beda dari PIN lama.']);
+
+        $this->replacePin($code, '2468', '0301')
+            ->assertSessionHasErrors(['new_pin' => 'PIN baru tidak boleh sama dengan 4 angka terakhir nomor HP.']);
+
+        $this->assertTrue(LoyaltyCustomer::where('customer_code', $code)->sole()->checkPin('2468'));
+    }
+
+    public function test_the_card_page_says_until_when_the_card_is_valid(): void
+    {
+        $code = $this->customerWithStamps('0800-0000-0301', null, 1, pin: '2468');
+        $this->setExpiry($code, '2027-02-19 23:59:59');
+        $this->verify('0800-0000-0301', '2468');
+
+        $this->get('/verify-success/'.$code)
+            ->assertOk()
+            ->assertSeeInOrder([$code.'-01', 'Berlaku s.d.', '19 Februari 2027']);
+    }
+
+    public function test_the_blurred_card_does_not_say_until_when_it_is_valid(): void
+    {
+        $code = $this->customerWithStamps('0800-0000-0301', null, 1);
+        $this->setExpiry($code, '2027-02-19 23:59:59');
+        $this->verify('0800-0000-0301', '0301');
+
+        $this->get('/verify-success/'.$code)
+            ->assertOk()
+            ->assertSee('Ganti PIN dulu')
+            ->assertDontSee('Berlaku')
+            ->assertDontSee('19 Februari 2027');
+    }
+
     public function test_the_card_says_when_a_reward_was_handed_over(): void
     {
         $code = $this->customerWithStamps('0800-0000-0301', null, 6, pin: '2468');
@@ -340,10 +547,26 @@ class CustomerVerificationTest extends TestCase
         ]);
     }
 
+    /** Changing a PIN the customer already set, from the "Ganti PIN" form. */
+    private function replacePin(string $code, string $currentPin, string $newPin, ?string $confirmation = null): TestResponse
+    {
+        return $this->put('/verify-success/'.$code.'/pin', [
+            'current_pin' => $currentPin,
+            'new_pin' => $newPin,
+            'new_pin_confirmation' => $confirmation ?? $newPin,
+        ]);
+    }
+
     /** The day the stamp of customerWithStamps() was given, as the card writes it. */
     private function stampDay(int $daysAgo): string
     {
         return now()->subDays($daysAgo)->locale(app()->getLocale())->translatedFormat('j F Y');
+    }
+
+    private function setExpiry(string $code, string $expiresAt): void
+    {
+        LoyaltyCustomer::where('customer_code', $code)->sole()->cards()->sole()
+            ->forceFill(['expires_at' => $expiresAt])->save();
     }
 
     /** The cashier hands over the reward of stamp $stamps on the customer's card. */

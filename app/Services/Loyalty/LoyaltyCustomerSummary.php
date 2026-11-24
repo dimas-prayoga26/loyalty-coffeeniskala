@@ -76,6 +76,43 @@ final class LoyaltyCustomerSummary
         ];
     }
 
+    /**
+     * One member in the POS list (Stamp Card → Riwayat → Member): every stamp
+     * earned so far on all cards, the card now and the rewards handed over or
+     * ready. The customer comes with stamps_count, stamps_max_stamped_at and
+     * redemptions_count (PosProgramController::members()).
+     *
+     * @param  Collection<int, array{stamps: int, label: string}>  $rewards
+     * @return array<string, mixed>
+     */
+    public static function memberRow(LoyaltyCustomer $customer, Collection $rewards): array
+    {
+        $customer = self::load($customer);
+        $current = self::currentCard($customer);
+        $lastStampAt = $customer->getAttribute('stamps_max_stamped_at');
+
+        return [
+            'id' => $customer->id,
+            'customer' => [
+                'code' => $customer->customer_code,
+                'name' => $customer->customer_name,
+                'phone' => $customer->phone_number,
+            ],
+            'registered_at' => $customer->created_at?->toIso8601String(),
+            'total_stamps' => (int) $customer->getAttribute('stamps_count'),
+            'last_stamp_at' => $lastStampAt ? Carbon::parse($lastStampAt)->toIso8601String() : null,
+            'cards' => $customer->cards->count(),
+            'card' => $current ? [
+                'number' => $current->card_number,
+                'stamps' => $current->total_stamps,
+                'slots' => (int) config('loyalty.stamps_per_card'),
+                'status' => $current->status->value,
+            ] : null,
+            'rewards_redeemed' => (int) $customer->getAttribute('redemptions_count'),
+            'rewards_ready' => (int) collect(self::readyRewards($customer, $rewards))->sum('count'),
+        ];
+    }
+
     private static function stampsToday(LoyaltyCustomer $customer): int
     {
         return $customer->cards
@@ -109,6 +146,7 @@ final class LoyaltyCustomerSummary
             'status' => $card->status,
             'redeemedRewards' => self::redeemedOn($card)->all(),
             'redeemedAt' => self::redeemedAtOn($card)->all(),
+            'expiresAt' => $card->expires_at,
         ]);
     }
 

@@ -55,6 +55,26 @@ class GiveLoyaltyStampsTest extends TestCase
         $this->assertSame(5, $stamps->map(fn ($stamp) => $stamp->stamped_at->toDateString())->unique()->count());
     }
 
+    public function test_the_card_is_valid_for_three_months_from_its_first_stamp(): void
+    {
+        // Two stamps on 1 December: dated 29 and 30 November.
+        $this->travelTo('2026-12-01 10:00:00');
+        $this->artisan('loyalty:give-stamps', ['phone' => '0800-0000-0707', 'stamps' => 2])->assertSuccessful();
+
+        $this->travelTo('2026-12-05 10:00:00');
+        $this->artisan('loyalty:give-stamps', ['phone' => '0800-0000-0707', 'stamps' => 5])->assertSuccessful();
+
+        $card = $this->cardOf('6280000000707');
+
+        // Each demo stamp is recorded as issued on the date it carries.
+        foreach ($card->stamps as $stamp) {
+            $this->assertEquals($stamp->stamped_at, $stamp->created_at);
+        }
+
+        // First stamp 29 November: February has no 29th in 2027.
+        $this->assertSame('2027-02-28 23:59:59', $card->expires_at->format('Y-m-d H:i:s'));
+    }
+
     public function test_ten_stamps_fill_the_card(): void
     {
         $this->artisan('loyalty:give-stamps', ['phone' => '0800-0000-0702', 'stamps' => 10])->assertSuccessful();

@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\LoyaltyCustomer;
 use App\Models\LoyaltyRedemption;
 use App\Models\LoyaltyReward;
 use App\Models\LoyaltyStamp;
+use App\Services\Loyalty\LoyaltyCustomerSummary;
 use App\Services\Loyalty\StampCardProgram;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -144,6 +146,45 @@ class PosProgramController extends Controller
                     : null,
                 'cashier' => $redemption->redeemedBy?->name,
             ])->values(),
+            'meta' => [
+                'page' => $page->currentPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+                'last_page' => $page->lastPage(),
+            ],
+        ]);
+    }
+
+    /**
+     * GET /api/pos/members?page=&per_page=&q=: the stamp card members, most
+     * stamps first (then the latest stamp): all the stamps each has earned,
+     * their card now and the rewards handed over or ready to hand over.
+     */
+    public function members(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'q' => ['sometimes', 'nullable', 'string', 'max:50'],
+        ]);
+        $search = trim((string) ($data['q'] ?? ''));
+
+        $page = LoyaltyCustomer::query()
+            ->withCount(['stamps', 'redemptions'])
+            ->withMax('stamps', 'stamped_at')
+            ->with(['cards' => fn ($query) => $query->orderBy('id'), 'cards.redemptions.reward'])
+            ->when($search !== '', fn ($query) => $this->matchCustomer($query, $search))
+            ->orderByDesc('stamps_count')
+            ->orderByDesc('stamps_max_stamped_at')
+            ->orderByDesc('id')
+            ->paginate($data['per_page'] ?? 20, ['*'], 'page', $data['page'] ?? 1);
+
+        $rewards = StampCardProgram::rewards();
+
+        return response()->json([
+            'data' => $page->getCollection()
+                ->map(fn (LoyaltyCustomer $customer) => LoyaltyCustomerSummary::memberRow($customer, $rewards))
+                ->values(),
             'meta' => [
                 'page' => $page->currentPage(),
                 'per_page' => $page->perPage(),

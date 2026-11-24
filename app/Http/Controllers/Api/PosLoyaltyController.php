@@ -9,6 +9,7 @@ use App\Models\LoyaltyCustomer;
 use App\Services\Loyalty\LoyaltyCustomerSummary;
 use App\Services\Loyalty\LoyaltyRedemptionService;
 use App\Services\Loyalty\LoyaltyStampService;
+use App\Services\Loyalty\RewardVoucher;
 use App\Services\Loyalty\StampCardProgram;
 use App\Support\WhatsAppNumber;
 use Illuminate\Http\JsonResponse;
@@ -44,6 +45,27 @@ class PosLoyaltyController extends Controller
             // Shown in the cart: the order total that earns a stamp.
             'stamp_min_order_total' => (int) config('loyalty.stamp_min_order_total'),
         ]);
+    }
+
+    /**
+     * GET /api/pos/vouchers/{code}: the cashier scanned the QR on the back
+     * of a stamp card. Answers the customer and the reward with its status
+     * ('ready' or why not); 404 when the QR isn't one of our vouchers, 422
+     * voucher_replaced for one shown more than a minute ago.
+     */
+    public function voucher(string $code): JsonResponse
+    {
+        try {
+            $voucher = RewardVoucher::resolve($code);
+        } catch (LoyaltyRuleException $e) {
+            return $this->refused($e);
+        }
+
+        if ($voucher === null) {
+            return $this->refused(LoyaltyRuleException::invalidVoucher());
+        }
+
+        return response()->json($voucher);
     }
 
     /**

@@ -34,12 +34,8 @@
                     autofocus
                     class="verify-card__input verify-card__input--pin"
                     data-pin-input
-                    aria-describedby="pin-hint @error('pin') pin-error @enderror"
-                    @error('pin') aria-invalid="true" @enderror
+                    @error('pin') aria-invalid="true" aria-describedby="pin-error" @enderror
                 >
-                <p id="pin-hint" class="verify-card__hint">
-                    Belum pernah ganti PIN? Pakai 4 angka terakhir nomor HP Anda.
-                </p>
                 @error('pin')
                     <p id="pin-error" class="verify-card__error" role="alert">{{ $message }}</p>
                 @enderror

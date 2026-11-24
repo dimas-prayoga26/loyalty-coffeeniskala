@@ -6,8 +6,10 @@ use App\Exceptions\InvalidWhatsAppNumberException;
 use App\Http\Requests\VerifyCustomerRequest;
 use App\Models\LoyaltyCustomer;
 use App\Services\Loyalty\LoyaltyCustomerSummary;
+use App\Services\Loyalty\RewardVoucher;
 use App\Support\WhatsAppNumber;
 use Closure;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -24,7 +26,8 @@ use Illuminate\View\View;
  * the cashier's order). The card page only opens in the browser session
  * that verified the number. While the customer still has the first PIN
  * (the last 4 digits of their number), the card stays blurred until they
- * set their own.
+ * set their own. Once set, they can change it from the card page with the
+ * old PIN.
  */
 class CustomerVerificationController extends Controller
 {
@@ -120,11 +123,13 @@ class CustomerVerificationController extends Controller
         if ($locked) {
             // Behind the blur: the current card's stickers only. Anyone who
             // knows the number knows the first PIN, so the visit dates (and
-            // when rewards were handed over) wait for the customer's own PIN.
+            // when rewards were handed over, and the validity that follows
+            // from the first visit) wait for the customer's own PIN.
             $cards = $cards->take(1)->map(fn (array $card) => [
                 ...$card,
                 'stamps' => array_fill(0, count($card['stamps']), null),
                 'redeemedAt' => [],
+                'expiresAt' => null,
             ]);
         }
 
@@ -137,9 +142,31 @@ class CustomerVerificationController extends Controller
     }
 
     /**
+     * GET /verify-success/{customerCode}/vouchers: the reward QRs of the
+     * customer's cards for the time slot now, fetched by the card page every
+     * minute (resources/js/voucher-qr.js). Only for the customer who opened
+     * the card with their own PIN.
+     */
+    public function vouchers(Request $request, string $customerCode): JsonResponse
+    {
+        $customer = $this->verifiedCustomer($request, $customerCode);
+
+        if ($customer === null || $customer->hasDefaultPin()) {
+            return response()->json(['message' => 'Buka ulang kartu stamp Anda.'], 403);
+        }
+
+        return response()->json([
+            'period' => RewardVoucher::period(),
+            'refresh_in' => RewardVoucher::secondsLeft(),
+            'vouchers' => RewardVoucher::codesFor($customer),
+        ])->header('Cache-Control', 'no-store, private');
+    }
+
+    /**
      * The first PIN must be replaced before the card is shown. Only that
-     * first change happens here; a PIN that was already changed is reset by
-     * setting loyalty_customers.pin back to NULL.
+     * first change happens here: a PIN the customer set is changed with
+     * editPin()/replacePin(), and a forgotten one is reset by setting
+     * loyalty_customers.pin back to NULL.
      */
     public function updatePin(Request $request, string $customerCode): RedirectResponse
     {
@@ -153,23 +180,102 @@ class CustomerVerificationController extends Controller
             return redirect()->route('verify.success', $customerCode);
         }
 
-        $data = $request->validate([
-            'new_pin' => [
-                'bail', 'required', 'digits:4', 'confirmed',
-                function (string $attribute, mixed $value, Closure $fail) use ($customer): void {
-                    if ($value === $customer->defaultPin()) {
-                        $fail('PIN baru tidak boleh sama dengan 4 angka terakhir nomor HP.');
-                    }
-                },
-            ],
-        ], [
-            'new_pin.required' => 'Tulis PIN baru Anda.',
-            'new_pin.digits' => 'PIN baru berupa 4 angka.',
-            'new_pin.confirmed' => 'Kedua PIN tidak sama. Tulis ulang keduanya.',
-        ]);
+        $data = $request->validate(
+            ['new_pin' => $this->newPinRules($customer)],
+            $this->newPinMessages(),
+        );
 
         $customer->changePin($data['new_pin']);
 
+        return $this->pinSaved($customerCode);
+    }
+
+    /**
+     * Form to change a PIN the customer already set. The first PIN is
+     * changed on the card page itself, so that case goes back there.
+     */
+    public function editPin(Request $request, string $customerCode): Response|RedirectResponse
+    {
+        $customer = $this->verifiedCustomer($request, $customerCode);
+
+        if ($customer === null) {
+            return $this->backToForm();
+        }
+
+        if ($customer->hasDefaultPin()) {
+            return redirect()->route('verify.success', $customerCode);
+        }
+
+        return response()->view('verify.change-pin', [
+            'customerCode' => $customer->customer_code,
+        ])->header('Cache-Control', 'no-store, private');
+    }
+
+    /**
+     * An open card page is not enough to change the PIN: the old PIN is asked
+     * too, and wrong ones count towards the same lock as the PIN step.
+     */
+    public function replacePin(Request $request, string $customerCode): RedirectResponse
+    {
+        $customer = $this->verifiedCustomer($request, $customerCode);
+
+        if ($customer === null) {
+            return $this->backToForm();
+        }
+
+        if ($customer->hasDefaultPin()) {
+            return redirect()->route('verify.success', $customerCode);
+        }
+
+        $data = $request->validate([
+            'current_pin' => ['bail', 'required', 'digits:4'],
+            'new_pin' => [...$this->newPinRules($customer), 'different:current_pin'],
+        ], [
+            'current_pin.required' => 'Tulis PIN lama Anda.',
+            'current_pin.digits' => 'PIN lama berupa 4 angka.',
+            'new_pin.different' => 'PIN baru harus beda dari PIN lama.',
+            ...$this->newPinMessages(),
+        ]);
+
+        $this->checkPin($customer, $data['current_pin'], 'current_pin');
+
+        $customer->changePin($data['new_pin']);
+
+        return $this->pinSaved($customerCode);
+    }
+
+    /**
+     * A new PIN, typed twice (new_pin_confirmation). The last 4 digits of
+     * the number are refused: anyone who knows the number knows them.
+     *
+     * @return array<int, string|Closure>
+     */
+    private function newPinRules(LoyaltyCustomer $customer): array
+    {
+        return [
+            'bail', 'required', 'digits:4', 'confirmed',
+            function (string $attribute, mixed $value, Closure $fail) use ($customer): void {
+                if ($value === $customer->defaultPin()) {
+                    $fail('PIN baru tidak boleh sama dengan 4 angka terakhir nomor HP.');
+                }
+            },
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function newPinMessages(): array
+    {
+        return [
+            'new_pin.required' => 'Tulis PIN baru Anda.',
+            'new_pin.digits' => 'PIN baru berupa 4 angka.',
+            'new_pin.confirmed' => 'Kedua PIN tidak sama. Tulis ulang keduanya.',
+        ];
+    }
+
+    private function pinSaved(string $customerCode): RedirectResponse
+    {
         return redirect()->route('verify.success', $customerCode)
             ->with('status', 'PIN baru tersimpan. Pakai PIN ini setiap kali membuka kartu.');
     }
@@ -178,14 +284,16 @@ class CustomerVerificationController extends Controller
      * A 4-digit PIN is guessed in at most 10,000 tries, so each number gets
      * PIN_ATTEMPTS wrong tries per PIN_LOCK_SECONDS, whatever the IP.
      *
+     * @param  string  $field  The form field the error is shown under.
+     *
      * @throws ValidationException
      */
-    private function checkPin(LoyaltyCustomer $customer, string $pin): void
+    private function checkPin(LoyaltyCustomer $customer, string $pin, string $field = 'pin'): void
     {
         $key = 'verify-pin:'.$customer->getKey();
 
         if (RateLimiter::tooManyAttempts($key, self::PIN_ATTEMPTS)) {
-            throw $this->pinLocked($key);
+            throw $this->pinLocked($key, $field);
         }
 
         if ($customer->checkPin($pin)) {
@@ -199,16 +307,16 @@ class CustomerVerificationController extends Controller
         $left = RateLimiter::remaining($key, self::PIN_ATTEMPTS);
 
         throw $left > 0
-            ? ValidationException::withMessages(['pin' => "PIN salah. Sisa {$left} kali percobaan."])
-            : $this->pinLocked($key);
+            ? ValidationException::withMessages([$field => "PIN salah. Sisa {$left} kali percobaan."])
+            : $this->pinLocked($key, $field);
     }
 
-    private function pinLocked(string $key): ValidationException
+    private function pinLocked(string $key, string $field): ValidationException
     {
         $minutes = max(1, (int) ceil(RateLimiter::availableIn($key) / 60));
 
         return ValidationException::withMessages([
-            'pin' => "PIN salah terlalu sering. Coba lagi dalam {$minutes} menit.",
+            $field => "PIN salah terlalu sering. Coba lagi dalam {$minutes} menit.",
         ]);
     }
 

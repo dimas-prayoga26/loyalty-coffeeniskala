@@ -16,7 +16,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * Demo/test: fills a number's card up to N stamps without POS orders, e.g.
  * "loyalty:give-stamps 1234567890 5". The stamps are dated one per day
- * before today, so today's stamp is still open. Safe to run again: a number
+ * before today (stamped_at and created_at alike), so today's stamp is still
+ * open. Safe to run again: a number
  * whose open card already has N stamps (or a full one) is left as it is.
  * --unredeemed first removes the rewards already handed over on that card,
  * so a demo number can show its reward again.
@@ -111,12 +112,21 @@ class GiveLoyaltyStamps extends Command
         $added = 0;
 
         for ($number = $card->total_stamps + 1; $number <= $target; $number++) {
-            $card->stamps()->create([
+            // Stamp $target yesterday, the ones before it a day apart. Each
+            // is recorded as issued that day too, like a real stamp.
+            $stampedAt = now()->subDays($target - $number + 1)->setTime(12, 0);
+
+            $stamp = $card->stamps()->forceCreate([
                 'stamp_number' => $number,
-                // Stamp $target yesterday, the ones before it a day apart.
-                'stamped_at' => now()->subDays($target - $number + 1)->setTime(12, 0),
+                'stamped_at' => $stampedAt,
+                'created_at' => $stampedAt,
+                'updated_at' => $stampedAt,
             ]);
             $added++;
+
+            if ($number === 1) {
+                $card->expires_at = LoyaltyCard::expiryAfterFirstStamp($stamp->created_at);
+            }
         }
 
         $card->total_stamps = max($card->total_stamps, $target);
