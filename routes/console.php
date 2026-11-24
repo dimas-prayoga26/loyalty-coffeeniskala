@@ -11,3 +11,7 @@ Artisan::command('inspire', function () {
 // Stamps the POS couldn't deliver (needs "php artisan schedule:run" every
 // minute from cron in production; locally "php artisan schedule:work").
 Schedule::command('loyalty:sync-stamps')->everyFiveMinutes()->withoutOverlapping();
+
+// Cards past their validity become Expired (stamping, redeeming and the
+// card page also close them the moment they are used).
+Schedule::command('loyalty:expire-cards')->hourly();

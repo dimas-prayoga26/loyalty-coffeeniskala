@@ -85,6 +85,17 @@ class StampCardComponentTest extends TestCase
             ->assertDontSee('Ditukar ');
     }
 
+    public function test_a_claimed_reward_is_stamped_on_its_slot_too(): void
+    {
+        $view = $this->card($this->stamps(10), redeemedRewards: [5])
+            ->assertSeeInOrder(['gratis</small>Roti Kukus', 'stamp-slot__claimed">Ditukar<', 'Roti Kukus gratis, sudah ditukar', 'Stamp ke-6'], false);
+
+        // Only the claimed one: the free drink is still waiting.
+        $this->assertSame(1, substr_count((string) $view, 'stamp-slot__claimed'));
+
+        $this->card($this->stamps(5))->assertDontSee('stamp-slot__claimed', false);
+    }
+
     public function test_a_claimed_reward_says_when_it_was_handed_over(): void
     {
         $this->blade(
@@ -185,6 +196,17 @@ class StampCardComponentTest extends TestCase
                 :stamps="$stamps" status="redeemed" expires-at="2027-02-19 23:59:59" />',
             ['stamps' => $this->stamps(10)],
         )->assertDontSee('Berlaku');
+    }
+
+    public function test_an_expired_card_says_when_it_ended(): void
+    {
+        $this->blade(
+            '<x-loyalty.stamp-card customer-code="NSK-000001" card-number="NSK-000001-01"
+                :stamps="$stamps" status="expired" expires-at="2026-02-19 23:59:59" />',
+            ['stamps' => $this->stamps(3)],
+        )
+            ->assertSeeInOrder(['Kartu kedaluwarsa', 'Berakhir', '19 Februari 2026'])
+            ->assertDontSee('Berlaku s.d.');
     }
 
     public function test_rewards_beyond_the_card_are_left_out(): void

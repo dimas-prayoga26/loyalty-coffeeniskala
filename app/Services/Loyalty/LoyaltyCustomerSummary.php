@@ -36,8 +36,16 @@ final class LoyaltyCustomerSummary
         return self::load(LoyaltyCustomer::query()->where('phone_number', $normalizedPhone)->first());
     }
 
+    /**
+     * The customer with their cards, stamps and redemptions. Cards past their
+     * validity are closed (Expired) first, so nothing reads them as open.
+     */
     public static function load(?LoyaltyCustomer $customer): ?LoyaltyCustomer
     {
+        if ($customer !== null && LoyaltyCard::expireOverdue($customer->id) > 0) {
+            $customer->unsetRelation('cards');
+        }
+
         return $customer?->loadMissing([
             'cards' => fn ($query) => $query->orderBy('id'),
             'cards.stamps' => fn ($query) => $query->orderBy('stamp_number'),

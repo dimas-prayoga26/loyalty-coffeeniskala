@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\LoyaltyCardStatus;
 use App\Models\LoyaltyCustomer;
 use App\Models\LoyaltyRedemption;
 use App\Models\LoyaltyReward;
@@ -430,6 +431,23 @@ class CustomerVerificationTest extends TestCase
         $this->get('/verify-success/'.$code)
             ->assertOk()
             ->assertSeeInOrder([$code.'-01', 'Berlaku s.d.', '19 Februari 2027']);
+    }
+
+    public function test_an_expired_card_says_its_stamps_start_again_from_zero(): void
+    {
+        $code = $this->customerWithStamps('0800-0000-0301', null, 3, pin: '2468');
+        $this->setExpiry($code, now()->subDay()->endOfDay()->toDateTimeString());
+        $this->verify('0800-0000-0301', '2468');
+
+        $this->get('/verify-success/'.$code)
+            ->assertOk()
+            ->assertSee('Masa berlaku kartu ini sudah habis. Stamp mulai lagi dari 0 di order berikutnya.')
+            ->assertSee('Kartu kedaluwarsa')
+            ->assertSee('Berakhir')
+            ->assertDontSee('Berlaku s.d.');
+
+        $card = LoyaltyCustomer::where('customer_code', $code)->sole()->cards()->sole();
+        $this->assertSame(LoyaltyCardStatus::Expired, $card->status);
     }
 
     public function test_the_blurred_card_does_not_say_until_when_it_is_valid(): void

@@ -46,7 +46,7 @@ users (POS)       1──< loyalty_stamps.created_by, loyalty_redemptions.redeem
 - **`loyalty_customers.phone_number`**: UNIQUE, disimpan dalam bentuk ternormalisasi (`6281234567890`) oleh `App\Support\WhatsAppNumber`.
 - **`loyalty_customers.pin`**: hash bcrypt PIN pelanggan untuk `/verify`. `NULL` berarti masih PIN awal, yaitu 4 angka terakhir nomor HP (`6283123555526` → `5526`). Untuk reset PIN yang lupa, set kembali ke `NULL`.
 - **`loyalty_cards`**: setiap pelanggan maksimal punya 1 kartu aktif. Aturan ini dijaga database lewat kolom generated `active_flag` dan unique key.
-- **`loyalty_cards.expires_at`**: kartu berlaku `LOYALTY_CARD_VALID_MONTHS` bulan (default 3) sejak stamp pertamanya terbit, yaitu `created_at` stamp itu (saat dicatat sistem), bukan tanggal order (`stamped_at`). Berlaku sampai pukul 23:59:59 di hari terakhir. Contoh: stamp pertama terbit 16 November → berlaku sampai 16 Februari 23:59:59. Kalau bulan tujuannya tidak punya tanggal itu, dipakai hari terakhir bulannya (30 November → 28 Februari). Kolom ini diisi saat stamp pertama diberikan; kartu tanpa stamp nilainya `NULL`. Untuk sekarang kolom ini hanya dicatat, belum memengaruhi stamp atau penukaran hadiah.
+- **`loyalty_cards.expires_at`**: kartu berlaku `LOYALTY_CARD_VALID_MONTHS` bulan (default 3) sejak stamp pertamanya terbit, yaitu `created_at` stamp itu (saat dicatat sistem), bukan tanggal order (`stamped_at`). Berlaku sampai pukul 23:59:59 di hari terakhir. Contoh: stamp pertama terbit 16 November → berlaku sampai 16 Februari 23:59:59. Kalau bulan tujuannya tidak punya tanggal itu, dipakai hari terakhir bulannya (30 November → 28 Februari). Kolom ini diisi saat stamp pertama diberikan; kartu tanpa stamp nilainya `NULL`. Setelah lewat, kartu menjadi `expired` (lihat aturan stamp di bawah).
 - **`loyalty_stamps.order_id`**: UNIQUE, sehingga satu order POS maksimal mendapat 1 stamp.
 
 ## Logic yang sudah ada
@@ -120,6 +120,9 @@ Penolakan dikirim sebagai `{message, reason}` dengan status 4xx. Contoh `reason`
 - Data order dibaca dari tabel `orders`. POS cukup mengirim `order_id`.
 - Satu order dapat satu stamp. Kartu yang mencapai `LOYALTY_STAMPS_PER_CARD` stamp menjadi `completed`, dan stamp berikutnya masuk ke kartu baru (`-02`).
 - Kartu `completed` berubah menjadi `redeemed` setelah semua hadiahnya ditukar. Baris `loyalty_rewards` dibuat saat hadiah itu pertama kali ditukar (`stamps_required`).
+- **Kedaluwarsa:** kartu `active` atau `completed` yang lewat `expires_at` menjadi `expired`. Stamp di kartu itu tidak dihitung lagi, jadi hitungannya mulai dari 0. Order berikutnya menjadi stamp 1 di kartu baru (`-02`, dan seterusnya) dengan masa berlaku 3 bulan yang baru. Hadiah yang belum ditukar di kartu itu hangus: tidak muncul di `ready_rewards`, penukarannya ditolak (`reward_not_ready`), dan voucher QR-nya berstatus `expired`.
+  - Statusnya diperbarui saat kartu dipakai (stamp, penukaran, halaman kartu, scan voucher, cek nomor di POS). Selain itu `php artisan loyalty:expire-cards` dijalankan tiap jam lewat scheduler.
+  - Di halaman pelanggan, kartu tampil dengan cap "Kedaluwarsa", tulisan "Berakhir <tanggal>", dan catatan bahwa stamp mulai lagi dari 0 di order berikutnya.
 
 **Stamp yang terlewat:** pos-backend tidak menunggu jawaban loyalty saat menyimpan order. `php artisan loyalty:sync-stamps` memberi stamp ke order ber-nomor HP dalam `LOYALTY_SYNC_DAYS` hari terakhir yang belum dapat stamp. Command ini dijadwalkan tiap 5 menit, jadi produksi butuh cron `* * * * * php artisan schedule:run`.
 

@@ -157,6 +157,11 @@ final class RewardVoucher
             return null;
         }
 
+        // A card past its validity is closed before its voucher is judged.
+        if (LoyaltyCard::expireOverdue($card->loyalty_customer_id) > 0) {
+            $card->refresh();
+        }
+
         $status = self::status($card, $reward);
 
         return [

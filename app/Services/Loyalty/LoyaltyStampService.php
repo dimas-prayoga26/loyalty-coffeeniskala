@@ -23,7 +23,10 @@ use RuntimeException;
  *
  * A card that reaches stamps_per_card becomes Completed; the next stamp
  * goes on a new card (registerOrRetrieve issues it). A card's first stamp
- * sets its expires_at (LoyaltyCard::expiryAfterFirstStamp()).
+ * sets its expires_at (LoyaltyCard::expiryAfterFirstStamp()). An Active
+ * card past it becomes Expired instead of taking the stamp: its stamps
+ * start again from 0, and this stamp is stamp 1 of a new card, with a new
+ * validity.
  *
  * A number earns at most max_stamps_per_day stamps on the order's day: the
  * next order that day is refused (daily_limit), whichever card it is on.
@@ -76,8 +79,8 @@ class LoyaltyStampService
                 return new LoyaltyStampResult($stamp, created: true, customerCreated: $registration->customerCreated);
             }
 
-            // A concurrent stamp filled the card; the next attempt gets the
-            // customer's new card.
+            // The card had just expired, or a concurrent stamp filled it:
+            // the next attempt gets the customer's new card.
             if ($attempt >= self::ATTEMPTS) {
                 throw new RuntimeException("Order #{$orderId}: no active card to stamp.");
             }
@@ -101,6 +104,10 @@ class LoyaltyStampService
     private function addStamp(int $cardId, PosOrder $order, ?int $cashierId): ?LoyaltyStamp
     {
         $card = LoyaltyCard::query()->lockForUpdate()->findOrFail($cardId);
+
+        if ($card->status === LoyaltyCardStatus::Active && $card->isOverdue()) {
+            $card->update(['status' => LoyaltyCardStatus::Expired]);
+        }
 
         if ($card->status !== LoyaltyCardStatus::Active) {
             return null;

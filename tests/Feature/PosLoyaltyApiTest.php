@@ -276,6 +276,64 @@ class PosLoyaltyApiTest extends TestCase
         $redeem(7)->assertUnprocessable()->assertJson(['reason' => 'unknown_reward']);
     }
 
+    public function test_after_the_card_expires_the_stamps_start_again_from_one_on_a_new_card(): void
+    {
+        $phone = '080000000217';
+
+        // First stamp 10 January: valid through 10 April.
+        $this->stampAt($phone, '2026-01-10 10:00:00');
+        $this->stampAt($phone, '2026-01-11 10:00:00');
+        $this->stampAt($phone, '2026-01-12 10:00:00');
+
+        // Its last day still counts on the same card.
+        $this->stampAt($phone, '2026-04-10 20:00:00')
+            ->assertJson(['stamp_number' => 4, 'card' => ['stamps' => 4, 'status' => 'active']]);
+
+        $first = LoyaltyCard::query()->whereHas('customer', fn ($q) => $q->where('phone_number', '6280000000217'))->sole();
+        $next = str_replace('-01', '-02', $first->card_number);
+
+        // The day after: back to 0, so this order is stamp 1 of a new card.
+        $this->stampAt($phone, '2026-04-11 09:00:00')
+            ->assertJson([
+                'stamp_number' => 1,
+                'card_number' => $next,
+                'card' => ['number' => $next, 'stamps' => 1, 'status' => 'active'],
+            ]);
+
+        $this->assertSame(LoyaltyCardStatus::Expired, $first->refresh()->status);
+        $this->assertSame(4, $first->total_stamps);
+        // The new card is valid 3 months from its own first stamp.
+        $this->assertSame(
+            '2026-07-11 23:59:59',
+            LoyaltyCard::query()->where('card_number', $next)->sole()->expires_at->format('Y-m-d H:i:s'),
+        );
+    }
+
+    public function test_a_reward_left_on_an_expired_card_can_no_longer_be_handed_over(): void
+    {
+        $phone = '080000000218';
+
+        foreach (range(10, 14) as $day) {
+            $this->stampAt($phone, "2026-01-{$day} 10:00:00");
+        }
+
+        $this->travelTo('2026-04-11 09:00:00');
+
+        $this->api('get', "/api/pos/customers/{$phone}")
+            ->assertOk()
+            ->assertJson([
+                'card' => ['stamps' => 5, 'status' => 'expired'],
+                'ready_rewards' => [],
+                'next_reward' => null,
+            ]);
+
+        $this->api('post', '/api/pos/redemptions', [
+            'phone' => $phone,
+            'reward_stamps' => 5,
+            'cashier_id' => PosUser::query()->firstOrFail()->id,
+        ])->assertUnprocessable()->assertJson(['reason' => 'reward_not_ready']);
+    }
+
     public function test_a_reward_claimed_with_an_order_keeps_the_order_and_the_menu(): void
     {
         $phone = '080000000216';
@@ -466,6 +524,19 @@ class PosLoyaltyApiTest extends TestCase
         }
 
         return $response;
+    }
+
+    /**
+     * An order of $phone stamped at $at (the clock set to it, so the stamp
+     * is issued then too).
+     */
+    private function stampAt(string $phone, string $at): TestResponse
+    {
+        $this->travelTo($at);
+
+        return $this->api('post', '/api/pos/stamps', [
+            'order_id' => $this->posOrder(['customer_phone' => $phone, 'order_date' => $at]),
+        ])->assertCreated();
     }
 
     /**

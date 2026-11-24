@@ -75,6 +75,20 @@ class GiveLoyaltyStampsTest extends TestCase
         $this->assertSame('2027-02-28 23:59:59', $card->expires_at->format('Y-m-d H:i:s'));
     }
 
+    public function test_stamps_for_a_number_whose_card_expired_go_on_a_new_card(): void
+    {
+        $this->travelTo('2026-01-10 10:00:00');
+        $this->artisan('loyalty:give-stamps', ['phone' => '0800-0000-0708', 'stamps' => 4])->assertSuccessful();
+
+        $this->travelTo('2026-06-01 10:00:00');
+        $this->artisan('loyalty:give-stamps', ['phone' => '0800-0000-0708', 'stamps' => 3])->assertSuccessful();
+
+        $cards = LoyaltyCustomer::where('phone_number', '6280000000708')->sole()->cards()->orderBy('id')->get();
+
+        $this->assertSame([LoyaltyCardStatus::Expired, LoyaltyCardStatus::Active], $cards->pluck('status')->all());
+        $this->assertSame([4, 3], $cards->pluck('total_stamps')->all());
+    }
+
     public function test_ten_stamps_fill_the_card(): void
     {
         $this->artisan('loyalty:give-stamps', ['phone' => '0800-0000-0702', 'stamps' => 10])->assertSuccessful();

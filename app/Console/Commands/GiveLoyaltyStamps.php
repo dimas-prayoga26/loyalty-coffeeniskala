@@ -45,6 +45,12 @@ class GiveLoyaltyStamps extends Command
             return self::FAILURE;
         }
 
+        // A card past its validity is closed first, as at the till: the
+        // stamps then go on a new card.
+        if ($customer = LoyaltyCustomer::query()->where('phone_number', $phone)->first()) {
+            LoyaltyCard::expireOverdue($customer->id);
+        }
+
         if ($this->option('unredeemed') && ($freed = $this->unredeem($phone)) > 0) {
             $this->info("{$phone}: {$freed} hadiah dibuat belum ditukar.");
         }

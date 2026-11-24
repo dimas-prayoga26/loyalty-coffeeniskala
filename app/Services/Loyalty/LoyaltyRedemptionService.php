@@ -19,7 +19,8 @@ use Illuminate\Support\Facades\DB;
  * Nothing is handed over while the program is off.
  *
  * Each reward is redeemed once per card. A Completed (full) card whose
- * active rewards are all redeemed becomes Redeemed.
+ * active rewards are all redeemed becomes Redeemed. A card past its
+ * validity is Expired first: what was still on it can't be handed over.
  */
 class LoyaltyRedemptionService
 {
@@ -50,6 +51,8 @@ class LoyaltyRedemptionService
             // Locks the customer: two cashiers can't hand over the same reward.
             $customer = LoyaltyCustomer::query()->where('phone_number', $phone)->lockForUpdate()->first()
                 ?? throw LoyaltyRuleException::customerNotRegistered();
+
+            LoyaltyCard::expireOverdue($customer->id);
 
             $card = $customer->cards()
                 ->whereIn('status', [LoyaltyCardStatus::Active, LoyaltyCardStatus::Completed])

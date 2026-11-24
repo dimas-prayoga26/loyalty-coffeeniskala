@@ -231,6 +231,12 @@
         color: var(--ink-soft);
     }
 
+    /* Under a sticker: on narrow cards the words are wider than the
+       sticker and would peek out at its sides. */
+    .stamp-slot.is-filled .stamp-slot__free {
+        visibility: hidden;
+    }
+
     @media (min-width: 400px) {
         .stamp-slot__free {
             font-size: 0.625rem;
@@ -287,6 +293,56 @@
         pointer-events: none;
         user-select: none;
         -webkit-touch-callout: none;
+    }
+
+    /* A claimed reward, marked by the cashier after the stickers go on:
+       its printed ring inked over in red, and a DITUKAR label across the
+       bottom of the spot, filled with paper so it reads over the photo. */
+    .stamp-slot.is-claimed .stamp-slot__spot::after {
+        --stamp-tilt: 0deg;
+
+        content: "";
+        position: absolute;
+        inset: -3px;
+        z-index: 1;
+        border: 3px double var(--color-stamp-red);
+        border-radius: 9999px;
+        pointer-events: none;
+        -webkit-mask: var(--ink-speckle) 0 0 / 60px;
+        mask: var(--ink-speckle) 0 0 / 60px;
+        animation: stamp-thud 0.4s cubic-bezier(0.3, 1.5, 0.5, 1) backwards;
+        animation-delay: calc(var(--collected, 0) * 80ms + 450ms);
+    }
+
+    .stamp-slot__claimed {
+        --stamp-tilt: -5deg;
+
+        position: absolute;
+        inset: auto 0 -0.25rem;
+        z-index: 2;
+        width: max-content;
+        margin: 0 auto;
+        padding: 0.1875rem 0.3125rem 0.125rem;
+        border: 1.5px solid currentColor;
+        border-radius: 0.1875rem;
+        background: var(--color-paper);
+        box-shadow: 0 1px 2px rgb(42 29 20 / 0.25);
+        font-size: 0.5rem;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-stamp-red);
+        pointer-events: none;
+        transform: rotate(var(--stamp-tilt));
+        animation: stamp-thud 0.4s cubic-bezier(0.3, 1.5, 0.5, 1) backwards;
+        animation-delay: calc(var(--collected, 0) * 80ms + 520ms);
+    }
+
+    @media (min-width: 400px) {
+        .stamp-slot__claimed {
+            font-size: 0.5625rem;
+        }
     }
 
     /* The newest sticker goes on last, a beat after the others. */
@@ -1079,14 +1135,14 @@
 @keyframes stamp-thud {
     0% {
         opacity: 0;
-        transform: rotate(-5deg) scale(1.9);
+        transform: rotate(var(--stamp-tilt, -5deg)) scale(1.9);
     }
     60% {
         opacity: 1;
-        transform: rotate(-5deg) scale(0.94);
+        transform: rotate(var(--stamp-tilt, -5deg)) scale(0.94);
     }
     100% {
-        transform: rotate(-5deg) scale(1);
+        transform: rotate(var(--stamp-tilt, -5deg)) scale(1);
     }
 }
 

@@ -93,8 +93,8 @@
     $identity = collect([$customerCode, $maskedPhone])->filter()->implode(' · ');
 
     // Validity, the card's fine print at the bottom: the last day, written
-    // in with the first stamp; before any stamp, the printed rule. Not on a
-    // card whose rewards were all taken.
+    // in with the first stamp ("Berakhir" once the card has expired); before
+    // any stamp, the printed rule. Not on a card whose rewards were all taken.
     $validUntil = filled($expiresAt) && $status !== LoyaltyCardStatus::Redeemed ? $formatDate($expiresAt) : null;
     $validityRule = $validUntil === null && $collected === 0 && $status === LoyaltyCardStatus::Active
         ? 'Berlaku '.config('loyalty.card_valid_months').' bulan sejak stamp pertama'
@@ -167,6 +167,7 @@
                                 'stamp-slot',
                                 'is-filled' => $filled,
                                 'is-reward' => $reward,
+                                'is-claimed' => $reward && $reward['state'] === 'redeemed',
                                 'is-fresh' => $freshStamp && $filled && $i === $collected - 1,
                             ])
                             style="--tilt: {{ $tilts[$i % count($tilts)] }}deg; --i: {{ $i }}"
@@ -183,10 +184,15 @@
                                             <img src="{{ asset($image['file']) }}" alt="" width="400" height="400" loading="lazy" decoding="async">
                                         </span>
                                     @endif
+                                    {{-- Handed over: the cashier rings the reward's spot in red
+                                         ink and stamps DITUKAR over the bottom of it. --}}
+                                    @if ($reward && $reward['state'] === 'redeemed')
+                                        <span class="stamp-slot__claimed">Ditukar</span>
+                                    @endif
                                 </span>
                                 <span class="stamp-slot__date" aria-hidden="true">{{ $date?->format('j/n') }}</span>
                                 <span class="sr-only">
-                                    Stamp {{ $i + 1 }}{{ $reward ? ' (hadiah: '.$reward['label'].')' : '' }}:
+                                    Stamp {{ $i + 1 }}{{ $reward ? ' (hadiah: '.$reward['label'].($reward['state'] === 'redeemed' ? ', sudah ditukar' : '').')' : '' }}:
                                     {{ $filled ? trim('terkumpul '.$day) : 'belum terkumpul' }}
                                 </span>
                             </button>
@@ -252,7 +258,7 @@
                 {{-- The card's fine print: how long it is valid. --}}
                 @if ($validUntil)
                     <p class="stamp-card__valid">
-                        Berlaku s.d.
+                        {{ $status === LoyaltyCardStatus::Expired ? 'Berakhir' : 'Berlaku s.d.' }}
                         <span class="stamp-card__valid-date">{{ $validUntil->translatedFormat('j F Y') }}</span>
                     </p>
                 @elseif ($validityRule)

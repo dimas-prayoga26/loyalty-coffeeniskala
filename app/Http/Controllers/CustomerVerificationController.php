@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\LoyaltyCardStatus;
 use App\Exceptions\InvalidWhatsAppNumberException;
 use App\Http\Requests\VerifyCustomerRequest;
 use App\Models\LoyaltyCustomer;
@@ -138,6 +139,9 @@ class CustomerVerificationController extends Controller
             'customerName' => $customer->customer_name,
             'locked' => $locked,
             'cards' => $cards,
+            // The current card ran out: its stamps start again from 0 with
+            // the next order (a new card).
+            'cardExpired' => ! $locked && ($cards->first()['status'] ?? null) === LoyaltyCardStatus::Expired,
         ])->header('Cache-Control', 'no-store, private');
     }
 

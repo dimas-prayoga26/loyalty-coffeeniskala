@@ -10,6 +10,11 @@
             @if (session('status'))
                 <p class="page-note mt-4" role="status">{{ session('status') }}</p>
             @endif
+            @if ($cardExpired)
+                <p class="page-note mt-4">
+                    Masa berlaku kartu ini sudah habis. Stamp mulai lagi dari 0 di order berikutnya.
+                </p>
+            @endif
         </div>
 
         @if ($locked)
