@@ -32,7 +32,12 @@ class CustomerVerificationTest extends TestCase
         parent::setUp();
 
         Http::fake([
-            'challenges.cloudflare.com/*' => fn () => Http::response(['success' => $this->turnstilePasses]),
+            'challenges.cloudflare.com/*' => fn () => Http::response([
+                'success' => $this->turnstilePasses,
+                // A token from this form on the domain it is posted to.
+                'hostname' => request()->getHost(),
+                'action' => 'verify',
+            ]),
         ]);
     }
 
@@ -46,6 +51,7 @@ class CustomerVerificationTest extends TestCase
             ->assertDontSee('name="pin"', false)
             ->assertSee('Lanjut')
             ->assertSee('data-sitekey="site-key-for-test"', false)
+            ->assertSee('data-action="verify"', false)
             ->assertSee('challenges.cloudflare.com/turnstile/v0/api.js', false);
     }
 

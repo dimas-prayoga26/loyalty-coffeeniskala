@@ -50,6 +50,7 @@
                     <div
                         class="cf-turnstile"
                         data-sitekey="{{ $turnstileSiteKey }}"
+                        data-action="{{ \App\Rules\Turnstile::ACTION }}"
                         data-theme="light"
                         data-language="id"
                         data-callback="onTurnstileSuccess"

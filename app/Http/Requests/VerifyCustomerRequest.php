@@ -25,7 +25,7 @@ class VerifyCustomerRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'cf-turnstile-response' => ['bail', 'required', new Turnstile($this->ip())],
+            'cf-turnstile-response' => ['bail', 'required', new Turnstile($this->getHost(), $this->ip())],
             'phone' => ['bail', 'required', 'string', 'max:30'],
         ];
     }
