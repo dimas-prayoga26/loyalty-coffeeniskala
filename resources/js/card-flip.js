@@ -5,8 +5,9 @@
  * a stamp or a button) or a sideways drag shows the customer QR; TUKAR shows
  * that reward's voucher; a tap on the back or Esc turns it back. A drag
  * follows the pointer, let go and the card falls to the nearer side (or the
- * other side, after a quick flick). Keyboards and screen readers get the
- * "Tunjukkan QR" and "Balik ke depan kartu" buttons, hidden until focused.
+ * other side, after a quick flick). The QR button next to the owner's name
+ * turns it too. Keyboards and screen readers also get "Balik ke depan
+ * kartu", hidden until focused.
  *
  * The turn is --flip on [data-card-flipper], in degrees: 0 is the front,
  * ±180 the back. Without this script the back is shown under the card

@@ -249,20 +249,23 @@
                 <footer class="stamp-card__foot">
                     <div class="min-w-0">
                         <p class="stamp-card__label">Pemilik kartu</p>
-                        <p class="stamp-card__owner">{{ $customerName ?: 'Pelanggan Niskala' }}</p>
+                        <div class="stamp-card__owner-row">
+                            <p class="stamp-card__owner">{{ $customerName ?: 'Pelanggan Niskala' }}</p>
+                            {{-- Turns the card over to the customer QR: scanned at the
+                                 till, it fills in their name and number. --}}
+                            <button
+                                type="button"
+                                class="stamp-card__qr"
+                                title="Tunjukkan QR"
+                                data-card-flip="{{ \App\Services\Loyalty\RewardVoucher::MEMBER }}"
+                                aria-controls="{{ $memberVoucherId }}"
+                                aria-expanded="false"
+                            >
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 3h8v8H3zm2 2v4h4V5zm8-2h8v8h-8zm2 2v4h4V5zM3 13h8v8H3zm2 2v4h4v-4zm13-2h3v3h-3zm-5 0h3v3h-3zm3 3h2v2h-2zm2 2h3v3h-3zm-5 0h3v3h-3z"/></svg>
+                                <span class="sr-only">Tunjukkan QR</span>
+                            </button>
+                        </div>
                         <p class="stamp-card__meta">{{ $identity }}</p>
-                        {{-- Turns the card over to the customer QR: scanned at the
-                             till, it fills in their name and number. --}}
-                        <button
-                            type="button"
-                            class="stamp-card__qr"
-                            data-card-flip="{{ \App\Services\Loyalty\RewardVoucher::MEMBER }}"
-                            aria-controls="{{ $memberVoucherId }}"
-                            aria-expanded="false"
-                        >
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 3h8v8H3zm2 2v4h4V5zm8-2h8v8h-8zm2 2v4h4V5zM3 13h8v8H3zm2 2v4h4v-4zm13-2h3v3h-3zm-5 0h3v3h-3zm3 3h2v2h-2zm2 2h3v3h-3zm-5 0h3v3h-3z"/></svg>
-                            Tunjukkan QR
-                        </button>
                     </div>
                     <div class="shrink-0 text-right">
                         <p class="stamp-card__count">{{ $collected }}<span>/{{ $slots }}</span></p>
