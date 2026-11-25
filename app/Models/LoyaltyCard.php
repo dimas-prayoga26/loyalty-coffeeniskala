@@ -41,7 +41,7 @@ class LoyaltyCard extends Model
     }
 
     /**
-     * Card numbers read month-year-sequence (11-2026-001): the month the card
+     * Card numbers read year-month-sequence (26-11-001): the month the card
      * was issued and its place among that month's cards (MonthlySequence).
      * Called inside the registration transaction, which retries a clash.
      */

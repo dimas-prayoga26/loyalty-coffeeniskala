@@ -215,9 +215,9 @@ class PosLoyaltyApiTest extends TestCase
             ]);
 
         $response = $this->stampOrders($phone, 1);
-        // The next number of the month (month-year-sequence).
+        // The next number of the month (year-month-sequence).
         $next = LoyaltyCard::query()->where('loyalty_customer_id', $first->loyalty_customer_id)->whereKeyNot($first->id)->sole()->card_number;
-        $this->assertSame(now()->format('m-Y').'-002', $next);
+        $this->assertSame(now()->format('y-m').'-002', $next);
         $response
             ->assertJson([
                 'stamp_number' => 1,
@@ -296,7 +296,7 @@ class PosLoyaltyApiTest extends TestCase
         $first = LoyaltyCard::query()->whereHas('customer', fn ($q) => $q->where('phone_number', '6280000000217'))->sole();
         // The day after: back to 0, so this order is stamp 1 of a new card,
         // numbered in the month it is issued.
-        $next = '04-2026-001';
+        $next = '26-04-001';
         $this->stampAt($phone, '2026-04-11 09:00:00')
             ->assertJson([
                 'stamp_number' => 1,

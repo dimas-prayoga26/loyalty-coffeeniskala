@@ -38,13 +38,13 @@ class LoyaltyRegistrationTest extends TestCase
         $customer = LoyaltyCustomer::where('phone_number', '6280000000001')->sole();
         $this->assertTrue($customer->is($result->customer));
         $this->assertSame('Budi', $customer->customer_name);
-        // month-year-sequence of the month they registered, like card numbers.
-        $this->assertSame('11-2026-001', $customer->customer_code);
+        // year-month-sequence of the month they registered, like card numbers.
+        $this->assertSame('26-11-001', $customer->customer_code);
 
         $card = $customer->cards()->sole();
         $this->assertTrue($card->is($result->card));
-        // month-year-sequence of the month it was issued.
-        $this->assertSame('11-2026-001', $card->card_number);
+        // year-month-sequence of the month it was issued.
+        $this->assertSame('26-11-001', $card->card_number);
         $this->assertSame(LoyaltyCardStatus::Active, $card->status);
         $this->assertSame(0, $card->total_stamps);
     }
@@ -74,20 +74,20 @@ class LoyaltyRegistrationTest extends TestCase
     public function test_card_numbers_count_up_within_a_month_and_start_again_the_next(): void
     {
         $this->travelTo('2026-11-30 23:50:00');
-        $this->assertSame('11-2026-001', $this->service->registerOrRetrieve('0800-0000-0011')->card->card_number);
-        $this->assertSame('11-2026-002', $this->service->registerOrRetrieve('0800-0000-0012')->card->card_number);
+        $this->assertSame('26-11-001', $this->service->registerOrRetrieve('0800-0000-0011')->card->card_number);
+        $this->assertSame('26-11-002', $this->service->registerOrRetrieve('0800-0000-0012')->card->card_number);
 
         // 1 December WIB: a new month, back to 001 (customer code and card).
         $this->travelTo('2026-12-01 00:05:00');
         $december = $this->service->registerOrRetrieve('0800-0000-0013');
-        $this->assertSame('12-2026-001', $december->card->card_number);
-        $this->assertSame('12-2026-001', $december->customer->customer_code);
-        $this->assertSame('11-2026-002', LoyaltyCustomer::where('phone_number', '6280000000012')->value('customer_code'));
+        $this->assertSame('26-12-001', $december->card->card_number);
+        $this->assertSame('26-12-001', $december->customer->customer_code);
+        $this->assertSame('26-11-002', LoyaltyCustomer::where('phone_number', '6280000000012')->value('customer_code'));
 
         // The highest number of the month counts, not how many cards there are.
-        LoyaltyCard::query()->where('card_number', '12-2026-001')->update(['card_number' => '12-2026-041']);
-        $this->assertSame('12-2026-042', LoyaltyCard::nextCardNumber());
-        $this->assertSame('01-2027-001', LoyaltyCard::nextCardNumber(now()->addMonth()));
+        LoyaltyCard::query()->where('card_number', '26-12-001')->update(['card_number' => '26-12-041']);
+        $this->assertSame('26-12-042', LoyaltyCard::nextCardNumber());
+        $this->assertSame('27-01-001', LoyaltyCard::nextCardNumber(now()->addMonth()));
     }
 
     public function test_a_customer_without_an_active_card_gets_a_new_one(): void
@@ -101,7 +101,7 @@ class LoyaltyRegistrationTest extends TestCase
         $this->assertFalse($again->customerCreated);
         $this->assertTrue($again->cardCreated);
         $this->assertFalse($again->card->is($first->card));
-        $this->assertSame('11-2026-002', $again->card->card_number);
+        $this->assertSame('26-11-002', $again->card->card_number);
         $this->assertSame(LoyaltyCardStatus::Active, $again->card->status);
 
         $this->assertSame(LoyaltyCardStatus::Completed, $first->card->fresh()->status);

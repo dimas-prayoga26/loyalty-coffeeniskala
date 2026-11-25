@@ -18,8 +18,8 @@ class LoyaltyCustomer extends Model
 {
     protected static function booted(): void
     {
-        // Customer codes read month-year-sequence like card numbers
-        // (11-2026-001): the month the customer registered and their place
+        // Customer codes read year-month-sequence like card numbers
+        // (26-11-001): the month the customer registered and their place
         // among that month's new customers (MonthlySequence). Callers create
         // customers inside a transaction, which retries a clash.
         static::creating(function (LoyaltyCustomer $customer): void {

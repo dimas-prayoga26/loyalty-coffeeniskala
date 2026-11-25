@@ -220,7 +220,7 @@ class PosProgramApiTest extends TestCase
             ->assertJsonPath('data.0.customer.phone', '6280000000321')
             ->assertJsonPath('data.1.stamp_number', 2)
             ->assertJsonPath('data.1.cashier', null);
-        $this->assertMatchesRegularExpression('/^\d{2}-\d{4}-\d{3}$/', $response->json('data.0.card_number'));
+        $this->assertMatchesRegularExpression('/^\d{2}-\d{2}-\d{3}$/', $response->json('data.0.card_number'));
 
         // The POS deleted the order: its code stays.
         DB::table('orders')->where('id', $orderId)->delete();
@@ -256,13 +256,13 @@ class PosProgramApiTest extends TestCase
             ->assertJsonPath('data.1.customer.phone', '6280000000332')
             ->assertJsonPath('data.1.total_stamps', 3)
             // Issued after the first member's two cards: the third of the month.
-            ->assertJsonPath('data.1.card.number', now()->format('m-Y').'-003')
+            ->assertJsonPath('data.1.card.number', now()->format('y-m').'-003')
             ->assertJsonPath('data.1.card.stamps', 3)
             ->assertJsonPath('data.1.card.slots', 10)
             ->assertJsonPath('data.1.card.status', 'active')
             ->assertJsonPath('data.1.rewards_redeemed', 0)
             ->assertJsonPath('data.1.rewards_ready', 0);
-        $this->assertSame(now()->format('m-Y').'-002', $response->json('data.0.card.number'));
+        $this->assertSame(now()->format('y-m').'-002', $response->json('data.0.card.number'));
         // Valid until 3 months after its first stamp (end of that day).
         $this->assertSame(
             now()->addMonthsNoOverflow(3)->endOfDay()->toIso8601String(),

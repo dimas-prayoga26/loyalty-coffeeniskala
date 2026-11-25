@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
 /**
- * Codes that read month-year-sequence, e.g. 11-2026-001: the month (app
+ * Codes that read year-month-sequence, e.g. 26-11-001: the year and month (app
  * timezone, WIB) and the place among that month's codes, from 001 again
  * every month. Used for customer codes and card numbers. Call it inside the
  * transaction that saves the code: the lock keeps two cashiers from taking
@@ -18,7 +18,7 @@ class MonthlySequence
 {
     public static function next(Builder $query, string $column, ?CarbonInterface $at = null): string
     {
-        $prefix = Carbon::instance($at ?? now())->timezone(config('app.timezone'))->format('m-Y');
+        $prefix = Carbon::instance($at ?? now())->timezone(config('app.timezone'))->format('y-m');
         $last = $query
             ->where($column, 'like', $prefix.'-%')
             ->lockForUpdate()

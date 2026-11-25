@@ -5,7 +5,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Card numbers become month-year-sequence (11-2026-001, see
+ * Card numbers become year-month-sequence (26-11-001, see
  * LoyaltyCard::nextCardNumber()): the month each card was issued
  * (created_at) and its place among that month's cards, oldest first.
  * Only card_number changes; stamps and redemptions point at the card id.
@@ -22,7 +22,7 @@ return new class extends Migration
 
             $sequence = [];
             foreach ($cards as $card) {
-                $prefix = Carbon::parse($card->created_at ?? now())->format('m-Y');
+                $prefix = Carbon::parse($card->created_at ?? now())->format('y-m');
                 $sequence[$prefix] = ($sequence[$prefix] ?? 0) + 1;
                 DB::table('loyalty_cards')->where('id', $card->id)->update([
                     'card_number' => sprintf('%s-%03d', $prefix, $sequence[$prefix]),

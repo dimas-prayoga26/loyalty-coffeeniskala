@@ -5,7 +5,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Customer codes become month-year-sequence like card numbers (11-2026-001,
+ * Customer codes become year-month-sequence like card numbers (26-11-001,
  * see App\Support\MonthlySequence): the month each customer registered
  * (created_at) and their place among that month's customers, oldest first.
  * Everything points at the customer id, so only customer_code changes; a
@@ -22,7 +22,7 @@ return new class extends Migration
 
             $sequence = [];
             foreach ($customers as $customer) {
-                $prefix = Carbon::parse($customer->created_at ?? now())->format('m-Y');
+                $prefix = Carbon::parse($customer->created_at ?? now())->format('y-m');
                 $sequence[$prefix] = ($sequence[$prefix] ?? 0) + 1;
                 DB::table('loyalty_customers')->where('id', $customer->id)->update([
                     'customer_code' => sprintf('%s-%03d', $prefix, $sequence[$prefix]),

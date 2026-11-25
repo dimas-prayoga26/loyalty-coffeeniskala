@@ -9,7 +9,7 @@ use Tests\TestCase;
 
 /**
  * 2026_11_25_000001 / 000002: cards and customers from before
- * month-year-sequence codes get one, by the month each was issued /
+ * year-month-sequence codes get one, by the month each was issued /
  * registered, and get their old one back on rollback.
  */
 class RenumberLoyaltyCodesMigrationTest extends TestCase
@@ -39,9 +39,9 @@ class RenumberLoyaltyCodesMigrationTest extends TestCase
         $migration->up();
 
         $this->assertSame([
-            $budiFirst => '01-2025-001',
-            $sariFirst => '02-2025-001',
-            $budiSecond => '02-2025-002',
+            $budiFirst => '25-01-001',
+            $sariFirst => '25-02-001',
+            $budiSecond => '25-02-002',
         ], $numbers());
 
         $migration->down();
@@ -71,7 +71,7 @@ class RenumberLoyaltyCodesMigrationTest extends TestCase
 
         $migration->up();
 
-        $this->assertSame([$budi => '01-2025-001', $sari => '02-2025-001', $andi => '02-2025-002'], $codes());
+        $this->assertSame([$budi => '25-01-001', $sari => '25-02-001', $andi => '25-02-002'], $codes());
 
         $migration->down();
 
