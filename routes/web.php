@@ -4,7 +4,9 @@ use App\Enums\LoyaltyCardStatus;
 use App\Http\Controllers\CustomerVerificationController;
 use Illuminate\Support\Facades\Route;
 
-Route::redirect('/', '/verify');
+// Not Route::redirect: its relative URL drops the folder the app is served
+// from (production: coffeeniskala.com/loyalty), sending / to the site's /verify.
+Route::get('/', fn () => redirect()->route('verify.create'));
 
 Route::controller(CustomerVerificationController::class)->group(function () {
     Route::get('/verify', 'create')->name('verify.create');
