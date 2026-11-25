@@ -1,10 +1,12 @@
 /**
- * A stamp card with a reward ready to claim has its voucher (the QR) printed
- * on the back. TUKAR turns the card over to that reward's voucher; a tap on
- * the back or Esc turns it back (keyboards and screen readers also get a
- * "Balik ke depan kartu" button there). The card can also be turned by hand:
- * drag it sideways and it follows, let go and it falls to the nearer side
- * (or the other side, after a quick flick).
+ * Every stamp card has its QRs printed on the back: first the customer QR
+ * (name and number for the cashier), then a voucher per ready reward. The
+ * card turns with the cursor or a finger: a click / tap on the front (not on
+ * a stamp or a button) or a sideways drag shows the customer QR; TUKAR shows
+ * that reward's voucher; a tap on the back or Esc turns it back. A drag
+ * follows the pointer, let go and the card falls to the nearer side (or the
+ * other side, after a quick flick). Keyboards and screen readers get the
+ * "Tunjukkan QR" and "Balik ke depan kartu" buttons, hidden until focused.
  *
  * The turn is --flip on [data-card-flipper], in degrees: 0 is the front,
  * ±180 the back. Without this script the back is shown under the card
@@ -20,6 +22,12 @@ const TURN_THRESHOLD = 60;
 
 /** Pixels per millisecond that count as a flick, whatever the angle. */
 const FLICK_SPEED = 0.5;
+
+/** data-voucher of the customer QR (RewardVoucher::MEMBER). */
+const MEMBER_VOUCHER = '0';
+
+/** On the front, a click on these does its own thing instead of turning the card. */
+const OWN_CLICK = 'button, a, input, select, textarea, label, .stamp-slot';
 
 function setUpCard(card) {
     const flipper = card.querySelector('[data-card-flipper]');
@@ -43,6 +51,13 @@ function setUpCard(card) {
         vouchers.forEach((voucher) => {
             voucher.hidden = voucher.dataset.voucher !== stamps;
         });
+    }
+
+    /** Turned from the front by hand: the customer QR, not the last reward. */
+    function showMemberVoucher() {
+        if (vouchers.some((voucher) => voucher.dataset.voucher === MEMBER_VOUCHER)) {
+            showVoucher(MEMBER_VOUCHER);
+        }
     }
 
     /** Runs once the turn now starting has finished. */
@@ -132,6 +147,15 @@ function setUpCard(card) {
                 turnTo(angle - 180, { moveFocus: true });
             } else if (backIsUp() && event.target.closest('[data-card-back]')) {
                 turnToFront({ moveFocus: true });
+            } else if (
+                !backIsUp()
+                && event.target.closest('[data-card-front]')
+                && !event.target.closest(OWN_CLICK)
+                // A click beside an open stamp tip only closes the tip.
+                && !card.querySelector('.stamp-slot.is-open')
+            ) {
+                showMemberVoucher();
+                turnTo(angle - 180);
             }
         },
         { capture: true },
@@ -175,6 +199,9 @@ function setUpCard(card) {
                 return;
             }
             drag.moving = true;
+            if (!backIsUp()) {
+                showMemberVoucher();
+            }
             card.setPointerCapture(event.pointerId);
             card.classList.add('is-dragging');
             card.querySelectorAll('.stamp-slot.is-open').forEach((slot) => slot.classList.remove('is-open'));

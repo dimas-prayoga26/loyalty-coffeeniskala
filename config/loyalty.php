@@ -4,19 +4,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Customer Code Prefix
-    |--------------------------------------------------------------------------
-    |
-    | Loyalty customer codes look like NSK-000001 (prefix + zero-padded id).
-    | Card numbers append the card's sequence for that customer:
-    | NSK-000001-01, NSK-000001-02, ...
-    |
-    */
-
-    'customer_code_prefix' => env('LOYALTY_CUSTOMER_CODE_PREFIX', 'NSK'),
-
-    /*
-    |--------------------------------------------------------------------------
     | Stamps Per Card
     |--------------------------------------------------------------------------
     |
@@ -53,20 +40,6 @@ return [
     */
 
     'pos_api_token' => env('LOYALTY_POS_API_TOKEN', ''),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Reward Voucher QR
-    |--------------------------------------------------------------------------
-    |
-    | The QR on the back of a card changes every this many seconds (the
-    | customer's page fetches the new one). The cashier can scan the one
-    | shown now or the one just replaced; older ones (a screenshot) are
-    | refused.
-    |
-    */
-
-    'voucher_qr_seconds' => (int) env('LOYALTY_VOUCHER_QR_SECONDS', 60),
 
     /*
     |--------------------------------------------------------------------------

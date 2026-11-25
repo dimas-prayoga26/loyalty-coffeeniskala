@@ -78,9 +78,4 @@ class LoyaltyRuleException extends RuntimeException
     {
         return new self('invalid_voucher', 'QR ini bukan voucher Stamp Card Niskala.', 404);
     }
-
-    public static function voucherReplaced(): self
-    {
-        return new self('voucher_replaced', 'QR ini sudah berganti. Scan QR yang tampil sekarang di HP pelanggan.');
-    }
 }

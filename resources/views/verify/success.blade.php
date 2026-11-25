@@ -96,14 +96,6 @@
                 </form>
             </div>
         @else
-            {{-- The reward QRs change every minute: voucher-qr.js fetches the new ones. --}}
-            <div
-                hidden
-                data-voucher-refresh="{{ route('verify.vouchers', $customerCode) }}"
-                data-voucher-period="{{ \App\Services\Loyalty\RewardVoucher::period() }}"
-                data-voucher-refresh-in="{{ \App\Services\Loyalty\RewardVoucher::secondsLeft() }}"
-            ></div>
-
             {{-- Current card first, then full cards with a reward still to claim. --}}
             @foreach ($cards as $card)
                 <x-loyalty.stamp-card

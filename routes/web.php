@@ -12,8 +12,6 @@ Route::controller(CustomerVerificationController::class)->group(function () {
     Route::get('/verify/pin', 'pinForm')->name('verify.pin.create');
     Route::post('/verify/pin', 'confirmPin')->middleware('throttle:10,1')->name('verify.pin.store');
     Route::get('/verify-success/{customerCode}', 'success')->name('verify.success');
-    // The reward QRs change every minute; the card page fetches the new ones.
-    Route::get('/verify-success/{customerCode}/vouchers', 'vouchers')->middleware('throttle:30,1')->name('verify.vouchers');
     Route::post('/verify-success/{customerCode}/pin', 'updatePin')->middleware('throttle:10,1')->name('verify.pin');
     Route::get('/verify-success/{customerCode}/pin', 'editPin')->name('verify.pin.edit');
     Route::put('/verify-success/{customerCode}/pin', 'replacePin')->middleware('throttle:10,1')->name('verify.pin.update');
@@ -29,8 +27,8 @@ if (app()->isLocal()) {
                 'title' => 'Kartu baru',
                 'description' => 'Pelanggan baru terdaftar, belum ada stamp.',
                 'customerName' => 'Rina Maharani',
-                'customerCode' => 'NSK-000003',
-                'cardNumber' => 'NSK-000003-01',
+                'customerCode' => '11-2026-003',
+                'cardNumber' => '11-2026-003',
                 'phone' => '6285711122233',
                 'stamps' => [],
                 'status' => LoyaltyCardStatus::Active,
@@ -39,8 +37,8 @@ if (app()->isLocal()) {
                 'title' => 'Hampir dapat roti kukus',
                 'description' => '4 stamp: tinggal 1 stamp lagi untuk roti kukus gratis.',
                 'customerName' => 'Andi Pratama',
-                'customerCode' => 'NSK-000005',
-                'cardNumber' => 'NSK-000005-01',
+                'customerCode' => '11-2026-005',
+                'cardNumber' => '11-2026-005',
                 'phone' => '6282233344455',
                 'stamps' => $daysAgo(26, 19, 12, 5),
                 'status' => LoyaltyCardStatus::Active,
@@ -49,8 +47,8 @@ if (app()->isLocal()) {
                 'title' => 'Roti kukus gratis terbuka',
                 'description' => 'Stamp ke-5 baru saja ditambahkan: roti kukus gratis siap ditukar.',
                 'customerName' => 'Budi Santoso',
-                'customerCode' => 'NSK-000001',
-                'cardNumber' => 'NSK-000001-01',
+                'customerCode' => '11-2026-001',
+                'cardNumber' => '11-2026-001',
                 'phone' => '6281234567890',
                 'stamps' => $daysAgo(40, 31, 24, 15, 0),
                 'status' => LoyaltyCardStatus::Active,
@@ -60,8 +58,8 @@ if (app()->isLocal()) {
                 'title' => 'Roti kukus sudah ditukar',
                 'description' => 'Roti kukus gratis sudah diambil, stamp lanjut menuju minuman gratis.',
                 'customerName' => 'Dewi Lestari',
-                'customerCode' => 'NSK-000004',
-                'cardNumber' => 'NSK-000004-01',
+                'customerCode' => '11-2026-004',
+                'cardNumber' => '11-2026-004',
                 'phone' => '6281399988877',
                 'stamps' => $daysAgo(50, 43, 36, 29, 22, 12, 4),
                 'status' => LoyaltyCardStatus::Active,
@@ -72,8 +70,8 @@ if (app()->isLocal()) {
                 'title' => 'Kartu penuh',
                 'description' => 'Stamp ke-10 terkumpul: minuman gratis siap ditukar.',
                 'customerName' => 'Sista Ayu',
-                'customerCode' => 'NSK-000002',
-                'cardNumber' => 'NSK-000002-02',
+                'customerCode' => '11-2026-002',
+                'cardNumber' => '11-2026-002-02',
                 'phone' => '6289876543210',
                 'stamps' => $daysAgo(62, 55, 48, 41, 33, 27, 20, 13, 7, 1),
                 'status' => LoyaltyCardStatus::Active,
@@ -84,8 +82,8 @@ if (app()->isLocal()) {
                 'title' => 'Sudah ditukar',
                 'description' => 'Kartu lama yang kedua hadiahnya sudah diambil.',
                 'customerName' => 'Sista Ayu',
-                'customerCode' => 'NSK-000002',
-                'cardNumber' => 'NSK-000002-01',
+                'customerCode' => '11-2026-002',
+                'cardNumber' => '11-2026-002',
                 'phone' => '6289876543210',
                 'stamps' => $daysAgo(140, 128, 119, 110, 101, 95, 88, 80, 71, 66),
                 'status' => LoyaltyCardStatus::Redeemed,

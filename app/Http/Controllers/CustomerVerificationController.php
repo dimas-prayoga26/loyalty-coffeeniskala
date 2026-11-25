@@ -7,10 +7,8 @@ use App\Exceptions\InvalidWhatsAppNumberException;
 use App\Http\Requests\VerifyCustomerRequest;
 use App\Models\LoyaltyCustomer;
 use App\Services\Loyalty\LoyaltyCustomerSummary;
-use App\Services\Loyalty\RewardVoucher;
 use App\Support\WhatsAppNumber;
 use Closure;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -142,27 +140,6 @@ class CustomerVerificationController extends Controller
             // The current card ran out: its stamps start again from 0 with
             // the next order (a new card).
             'cardExpired' => ! $locked && ($cards->first()['status'] ?? null) === LoyaltyCardStatus::Expired,
-        ])->header('Cache-Control', 'no-store, private');
-    }
-
-    /**
-     * GET /verify-success/{customerCode}/vouchers: the reward QRs of the
-     * customer's cards for the time slot now, fetched by the card page every
-     * minute (resources/js/voucher-qr.js). Only for the customer who opened
-     * the card with their own PIN.
-     */
-    public function vouchers(Request $request, string $customerCode): JsonResponse
-    {
-        $customer = $this->verifiedCustomer($request, $customerCode);
-
-        if ($customer === null || $customer->hasDefaultPin()) {
-            return response()->json(['message' => 'Buka ulang kartu stamp Anda.'], 403);
-        }
-
-        return response()->json([
-            'period' => RewardVoucher::period(),
-            'refresh_in' => RewardVoucher::secondsLeft(),
-            'vouchers' => RewardVoucher::codesFor($customer),
         ])->header('Cache-Control', 'no-store, private');
     }
 

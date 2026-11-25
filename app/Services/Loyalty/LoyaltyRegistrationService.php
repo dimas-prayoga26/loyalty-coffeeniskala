@@ -76,10 +76,8 @@ class LoyaltyRegistrationService
      */
     private function issueCard(LoyaltyCustomer $customer): LoyaltyCard
     {
-        $sequence = $customer->cards()->count() + 1;
-
         return $customer->cards()->create([
-            'card_number' => sprintf('%s-%02d', $customer->customer_code, $sequence),
+            'card_number' => LoyaltyCard::nextCardNumber(),
             'total_stamps' => 0,
             'status' => LoyaltyCardStatus::Active,
         ]);

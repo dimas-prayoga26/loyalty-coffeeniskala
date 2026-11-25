@@ -627,8 +627,15 @@
         margin: 0;
     }
 
+    /* The front can be taken and turned (card-flip.js): a hand for the
+       cursor; stamps and buttons keep their own. */
+    .stamp-card.has-back [data-card-front] {
+        cursor: grab;
+    }
+
     /* Held by the finger or the mouse: the card follows it, no easing. */
-    .stamp-card.is-dragging {
+    .stamp-card.is-dragging,
+    .stamp-card.is-dragging [data-card-front] {
         cursor: grabbing;
         user-select: none;
     }
@@ -726,19 +733,6 @@
         line-height: 1.5;
     }
 
-    /* "QR berganti dalam 42 detik": only on the customer's own page. */
-    .reward-voucher__timer {
-        margin-top: 0.5rem;
-        font-size: 0.75rem;
-        text-align: center;
-        color: var(--ink-soft);
-        font-variant-numeric: tabular-nums;
-    }
-
-    .reward-voucher__timer:empty {
-        display: none;
-    }
-
     .reward-voucher__close {
         display: block;
         width: 100%;
@@ -762,8 +756,37 @@
         outline-offset: 2px;
     }
 
+    /* Turns the card over to the customer QR. The cursor and fingers turn
+       the card themselves, so like the close button below it is only for
+       keyboards and screen readers: out of sight until it has keyboard focus. */
+    .stamp-card__qr {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        margin-top: 0.5rem;
+        padding: 0.375rem 0.75rem;
+        border: 1px solid var(--color-ink);
+        border-radius: 999px;
+        background: var(--color-paper);
+        color: var(--color-ink);
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .stamp-card__qr svg {
+        width: 1rem;
+        height: 1rem;
+    }
+
+    .stamp-card__qr:focus-visible {
+        outline: 2px solid var(--color-pen);
+        outline-offset: 2px;
+    }
+
     /* Taps turn the card back, so the button is only for keyboards and
        screen readers: out of sight until it has keyboard focus. */
+    .stamp-card__qr:not(:focus-visible),
     .reward-voucher__close:not(:focus-visible) {
         position: absolute;
         width: 1px;

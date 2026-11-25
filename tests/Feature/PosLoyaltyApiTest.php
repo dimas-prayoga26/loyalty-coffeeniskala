@@ -214,10 +214,14 @@ class PosLoyaltyApiTest extends TestCase
                 'next_reward' => null,
             ]);
 
-        $this->stampOrders($phone, 1)
+        $response = $this->stampOrders($phone, 1);
+        // The next number of the month (month-year-sequence).
+        $next = LoyaltyCard::query()->where('loyalty_customer_id', $first->loyalty_customer_id)->whereKeyNot($first->id)->sole()->card_number;
+        $this->assertSame(now()->format('m-Y').'-002', $next);
+        $response
             ->assertJson([
                 'stamp_number' => 1,
-                'card_number' => str_replace('-01', '-02', $first->card_number),
+                'card_number' => $next,
                 'card' => ['stamps' => 1, 'status' => 'active'],
                 // The full card's rewards are still there to claim.
                 'ready_rewards' => [['stamps' => 5, 'count' => 1], ['stamps' => 10, 'count' => 1]],
@@ -290,9 +294,9 @@ class PosLoyaltyApiTest extends TestCase
             ->assertJson(['stamp_number' => 4, 'card' => ['stamps' => 4, 'status' => 'active']]);
 
         $first = LoyaltyCard::query()->whereHas('customer', fn ($q) => $q->where('phone_number', '6280000000217'))->sole();
-        $next = str_replace('-01', '-02', $first->card_number);
-
-        // The day after: back to 0, so this order is stamp 1 of a new card.
+        // The day after: back to 0, so this order is stamp 1 of a new card,
+        // numbered in the month it is issued.
+        $next = '04-2026-001';
         $this->stampAt($phone, '2026-04-11 09:00:00')
             ->assertJson([
                 'stamp_number' => 1,
@@ -420,13 +424,11 @@ class PosLoyaltyApiTest extends TestCase
     {
         $cardNumber = $this->stampOrders('080000000222', 5)->json('card.number');
         $code = RewardVoucher::code($cardNumber, 5);
-        [$prefix, , , $slot, $signature] = explode('.', $code);
+        [$prefix, , , $signature] = explode('.', $code);
 
         $refused = [
             // The signature of stamp 5 on stamp 10.
-            "{$prefix}.{$cardNumber}.10.{$slot}.{$signature}",
-            // The signature of this minute on the next one.
-            "{$prefix}.{$cardNumber}.5.".($slot + 1).".{$signature}",
+            "{$prefix}.{$cardNumber}.10.{$signature}",
             // One character of the signature changed.
             substr($code, 0, -1).(str_ends_with($code, '0') ? '1' : '0'),
             // Signed, but no such card.
@@ -442,26 +444,33 @@ class PosLoyaltyApiTest extends TestCase
         }
     }
 
-    public function test_a_voucher_qr_changes_every_minute_and_an_old_one_is_refused(): void
+    public function test_a_customer_qr_only_names_the_customer(): void
+    {
+        $cardNumber = $this->stampOrders('080000000226', 1)->json('card.number');
+        $code = RewardVoucher::code($cardNumber, RewardVoucher::MEMBER);
+
+        // One stamp, no reward ready: still the customer's name and number.
+        $this->api('get', '/api/pos/vouchers/'.$code)
+            ->assertOk()
+            ->assertJson([
+                'status' => 'member',
+                'ready' => false,
+                'message' => null,
+                'customer' => ['phone' => '6280000000226'],
+                'card_number' => $cardNumber,
+                'reward' => null,
+            ]);
+    }
+
+    public function test_a_voucher_qr_stays_the_same_and_still_scans_later(): void
     {
         $cardNumber = $this->stampOrders('080000000224', 5)->json('card.number');
-
-        $this->travelTo('2026-11-24 10:00:15');
         $shown = RewardVoucher::code($cardNumber, 5);
-        $this->assertSame(45, RewardVoucher::secondsLeft());
 
-        // The next minute: a new QR; the one just replaced still scans.
-        $this->travelTo('2026-11-24 10:01:05');
-        $next = RewardVoucher::code($cardNumber, 5);
-        $this->assertNotSame($shown, $next);
-        $this->api('get', '/api/pos/vouchers/'.$shown)->assertOk()->assertJson(['status' => 'ready']);
+        $this->travel(1)->weeks();
 
-        // Two minutes on (a screenshot): refused, the current one works.
-        $this->travelTo('2026-11-24 10:02:01');
+        $this->assertSame($shown, RewardVoucher::code($cardNumber, 5));
         $this->api('get', '/api/pos/vouchers/'.$shown)
-            ->assertUnprocessable()
-            ->assertJson(['reason' => 'voucher_replaced']);
-        $this->api('get', '/api/pos/vouchers/'.RewardVoucher::code($cardNumber, 5))
             ->assertOk()
             ->assertJson(['status' => 'ready', 'customer' => ['phone' => '6280000000224']]);
     }

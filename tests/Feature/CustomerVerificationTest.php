@@ -98,7 +98,7 @@ class CustomerVerificationTest extends TestCase
         $this->get('/verify-success/'.$code)
             ->assertOk()
             ->assertSee('Halo, Pelanggan Uji')
-            ->assertSee($code.'-01')
+            ->assertSee($this->cardNumberOf($code))
             ->assertSee('0800••••0301')
             ->assertSee('4 dari 10 stamp terkumpul')
             ->assertSee('terkumpul '.$this->stampDay(3))
@@ -250,40 +250,17 @@ class CustomerVerificationTest extends TestCase
             ->assertSee('href="'.route('verify.pin.edit', $code).'"', false);
     }
 
-    public function test_the_card_page_fetches_the_reward_qrs_of_the_minute(): void
+    public function test_the_card_page_shows_fixed_reward_qrs(): void
     {
-        $this->freezeTime();
         $code = $this->customerWithStamps('0800-0000-0301', 'Sinta', 5, pin: '2468');
         $this->verify('0800-0000-0301', '2468');
         $cardNumber = LoyaltyCustomer::where('customer_code', $code)->sole()->cards()->sole()->card_number;
 
         $this->get('/verify-success/'.$code)
             ->assertOk()
-            ->assertSee('data-voucher-refresh="'.route('verify.vouchers', $code).'"', false)
             ->assertSee('data-voucher-qr="'.RewardVoucher::code($cardNumber, 5).'"', false)
-            ->assertSee('data-voucher-timer', false);
-
-        $this->travel(61)->seconds();
-
-        $this->getJson('/verify-success/'.$code.'/vouchers')
-            ->assertOk()
-            ->assertJsonPath('period', 60)
-            ->assertJsonFragment([
-                'card_number' => $cardNumber,
-                'stamps' => 5,
-                'code' => RewardVoucher::code($cardNumber, 5),
-            ]);
-    }
-
-    public function test_the_reward_qrs_are_only_for_the_customer_who_opened_the_card(): void
-    {
-        $code = $this->customerWithStamps('0800-0000-0301', null, 5, pin: '2468');
-        $this->getJson('/verify-success/'.$code.'/vouchers')->assertForbidden();
-
-        // Still on the first PIN: the card is blurred, no QRs either.
-        $blurred = $this->customerWithStamps('0800-0000-0302', null, 5);
-        $this->verify('0800-0000-0302', '0302');
-        $this->getJson('/verify-success/'.$blurred.'/vouchers')->assertForbidden();
+            ->assertSee('data-voucher-qr="'.RewardVoucher::code($cardNumber, RewardVoucher::MEMBER).'"', false)
+            ->assertDontSee('data-voucher-timer', false);
     }
 
     public function test_the_blurred_card_has_no_change_pin_link(): void
@@ -422,6 +399,11 @@ class CustomerVerificationTest extends TestCase
         $this->assertTrue(LoyaltyCustomer::where('customer_code', $code)->sole()->checkPin('2468'));
     }
 
+    private function cardNumberOf(string $customerCode): string
+    {
+        return LoyaltyCustomer::where('customer_code', $customerCode)->sole()->cards()->sole()->card_number;
+    }
+
     public function test_the_card_page_says_until_when_the_card_is_valid(): void
     {
         $code = $this->customerWithStamps('0800-0000-0301', null, 1, pin: '2468');
@@ -430,7 +412,7 @@ class CustomerVerificationTest extends TestCase
 
         $this->get('/verify-success/'.$code)
             ->assertOk()
-            ->assertSeeInOrder([$code.'-01', 'Berlaku s.d.', '19 Februari 2027']);
+            ->assertSeeInOrder([$this->cardNumberOf($code), 'Berlaku s.d.', '19 Februari 2027']);
     }
 
     public function test_an_expired_card_says_its_stamps_start_again_from_zero(): void

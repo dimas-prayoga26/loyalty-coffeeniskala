@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\LoyaltyCardStatus;
+use App\Support\MonthlySequence;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -37,6 +38,16 @@ class LoyaltyCard extends Model
             'status' => LoyaltyCardStatus::class,
             'expires_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Card numbers read month-year-sequence (11-2026-001): the month the card
+     * was issued and its place among that month's cards (MonthlySequence).
+     * Called inside the registration transaction, which retries a clash.
+     */
+    public static function nextCardNumber(?CarbonInterface $issuedAt = null): string
+    {
+        return MonthlySequence::next(static::query(), 'card_number', $issuedAt);
     }
 
     /**

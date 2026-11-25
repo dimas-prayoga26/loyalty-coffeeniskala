@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\LoyaltyCardStatus;
+use App\Support\MonthlySequence;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
@@ -17,16 +18,12 @@ class LoyaltyCustomer extends Model
 {
     protected static function booted(): void
     {
-        // The code is derived from the auto-increment id, which only exists
-        // after the insert. Callers create customers inside a transaction,
-        // so no one ever sees a customer without a code.
-        static::created(function (LoyaltyCustomer $customer): void {
-            $customer->customer_code = sprintf(
-                '%s-%06d',
-                config('loyalty.customer_code_prefix'),
-                $customer->getKey(),
-            );
-            $customer->saveQuietly();
+        // Customer codes read month-year-sequence like card numbers
+        // (11-2026-001): the month the customer registered and their place
+        // among that month's new customers (MonthlySequence). Callers create
+        // customers inside a transaction, which retries a clash.
+        static::creating(function (LoyaltyCustomer $customer): void {
+            $customer->customer_code ??= MonthlySequence::next(static::query(), 'customer_code');
         });
     }
 

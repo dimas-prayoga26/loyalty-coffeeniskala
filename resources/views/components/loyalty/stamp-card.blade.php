@@ -5,8 +5,8 @@
     are the ones that move.
 
     <x-loyalty.stamp-card
-        customer-code="NSK-000001"
-        card-number="NSK-000001-01"
+        customer-code="11-2026-001"
+        card-number="11-2026-001"
         customer-name="Budi"            (optional)
         phone="6281234567890"           (optional, normalized form)
         :stamps="$datesOfCollectedStamps" (Carbon|string, oldest first; null = date not shown)
@@ -100,8 +100,11 @@
         ? 'Berlaku '.config('loyalty.card_valid_months').' bulan sejak stamp pertama'
         : null;
 
-    // One voucher per ready reward, unique on the page: voucher-NSK-000001-01-5.
+    // One voucher per ready reward, unique on the page: voucher-11-2026-001-5;
+    // the customer QR is stamps 0 (voucher-11-2026-001-0).
     $voucherId = fn (array $reward) => 'voucher-'.\Illuminate\Support\Str::slug($cardNumber).'-'.$reward['stamps'];
+    $memberVoucherId = $voucherId(['stamps' => \App\Services\Loyalty\RewardVoucher::MEMBER]);
+    $memberCode = \App\Services\Loyalty\RewardVoucher::code($cardNumber, \App\Services\Loyalty\RewardVoucher::MEMBER);
     // What its QR holds: signed, one per reward of this card, works once.
     $voucherCode = fn (array $reward) => \App\Services\Loyalty\RewardVoucher::code($cardNumber, $reward['stamps']);
     $readyRewards = $rewards->where('state', 'ready');
@@ -123,7 +126,7 @@
 <article
     {{ $attributes->class([
         'stamp-card',
-        'has-back' => $readyRewards->isNotEmpty(),
+        'has-back',
         'is-redeemed' => $status === LoyaltyCardStatus::Redeemed,
         'is-expired' => $status === LoyaltyCardStatus::Expired,
     ]) }}
@@ -131,7 +134,7 @@
     aria-label="Kartu stamp {{ $cardNumber }}"
     data-stamp-card
 >
-    <div class="stamp-card__flipper" @if ($readyRewards->isNotEmpty()) data-card-flipper @endif>
+    <div class="stamp-card__flipper" data-card-flipper>
         <div class="paper-card stamp-card__face" data-card-front>
             <div class="paper-card__frame">
                 <header class="stamp-card__head">
@@ -213,7 +216,7 @@
                                 <span class="reward-row__text">
                                     <span class="reward-row__label">{{ $reward['label'] }}</span>
                                     @if ($reward['state'] === 'ready')
-                                        <span class="reward-row__hint">Tunjukkan ke kasir</span>
+                                        <span class="reward-row__hint">Siap diambil, ketuk Tukar</span>
                                     @elseif ($reward['state'] === 'redeemed' && $redeemedAt->has($reward['stamps']))
                                         <span class="reward-row__hint">
                                             Ditukar {{ $redeemedAt[$reward['stamps']]->translatedFormat('j F Y, H.i') }}
@@ -248,6 +251,18 @@
                         <p class="stamp-card__label">Pemilik kartu</p>
                         <p class="stamp-card__owner">{{ $customerName ?: 'Pelanggan Niskala' }}</p>
                         <p class="stamp-card__meta">{{ $identity }}</p>
+                        {{-- Turns the card over to the customer QR: scanned at the
+                             till, it fills in their name and number. --}}
+                        <button
+                            type="button"
+                            class="stamp-card__qr"
+                            data-card-flip="{{ \App\Services\Loyalty\RewardVoucher::MEMBER }}"
+                            aria-controls="{{ $memberVoucherId }}"
+                            aria-expanded="false"
+                        >
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 3h8v8H3zm2 2v4h4V5zm8-2h8v8h-8zm2 2v4h4V5zM3 13h8v8H3zm2 2v4h4v-4zm13-2h3v3h-3zm-5 0h3v3h-3zm3 3h2v2h-2zm2 2h3v3h-3zm-5 0h3v3h-3z"/></svg>
+                            Tunjukkan QR
+                        </button>
                     </div>
                     <div class="shrink-0 text-right">
                         <p class="stamp-card__count">{{ $collected }}<span>/{{ $slots }}</span></p>
@@ -273,18 +288,54 @@
             @endif
         </div>
 
-        @if ($readyRewards->isNotEmpty())
-            {{-- The back of the card: the voucher the customer shows at the
-                 till, one per ready reward; TUKAR shows its own. Inert until
-                 the card is turned over. --}}
-            <div class="paper-card stamp-card__face stamp-card__back" data-card-back inert>
-                <div class="paper-card__frame">
+        {{-- The back of the card: what the customer shows at the till. First
+             the customer QR (Tunjukkan QR, and a turn by hand), then one voucher
+             per ready reward (TUKAR shows its own). Inert until the card is
+             turned over. --}}
+        <div class="paper-card stamp-card__face stamp-card__back" data-card-back inert>
+            <div class="paper-card__frame">
+                <section
+                    id="{{ $memberVoucherId }}"
+                    class="reward-voucher"
+                    aria-labelledby="{{ $memberVoucherId }}-title"
+                    data-voucher="{{ \App\Services\Loyalty\RewardVoucher::MEMBER }}"
+                >
+                    <p class="reward-voucher__from">Kartu stamp No. {{ $cardNumber }}</p>
+                    <h2 id="{{ $memberVoucherId }}-title" class="reward-voucher__title" tabindex="-1" data-voucher-title>
+                        {{ $customerName ?: 'Pelanggan Niskala' }}
+                    </h2>
+                    <p class="reward-voucher__meta">{{ $identity }}</p>
+
+                    <div class="reward-voucher__qr-slot">
+                        <figure
+                            class="reward-voucher__qr"
+                            role="img"
+                            aria-label="Kode QR pelanggan untuk kasir"
+                            data-voucher-qr="{{ $memberCode }}"
+                            data-voucher-card="{{ $cardNumber }}"
+                            data-voucher-stamps="{{ \App\Services\Loyalty\RewardVoucher::MEMBER }}"
+                        >
+                            <noscript>
+                                <span class="reward-voucher__code">{{ $memberCode }}</span>
+                            </noscript>
+                        </figure>
+                    </div>
+
+                    <p class="reward-voucher__note">
+                        Tunjukkan QR ini saat membayar. Kasir tidak perlu mencatat nomor HP Anda, stamp langsung masuk ke kartu ini.
+                    </p>
+
+                    <button type="button" class="reward-voucher__close">
+                        Balik ke depan kartu
+                    </button>
+                </section>
+
                     @foreach ($readyRewards as $reward)
                         <section
                             id="{{ $voucherId($reward) }}"
                             class="reward-voucher"
                             aria-labelledby="{{ $voucherId($reward) }}-title"
-                            data-voucher="{{ $reward['stamps'] }}" @unless ($loop->first) hidden @endunless
+                            data-voucher="{{ $reward['stamps'] }}" hidden
                         >
                             <p class="reward-voucher__from">Kartu stamp No. {{ $cardNumber }}</p>
                             <h2 id="{{ $voucherId($reward) }}-title" class="reward-voucher__title" tabindex="-1" data-voucher-title>
@@ -295,7 +346,7 @@
                             </p>
 
                             {{-- The reward's own QR (RewardVoucher), drawn by
-                                 resources/js/voucher-qr.js and replaced every minute.
+                                 resources/js/voucher-qr.js. It stays the same.
                                  The cashier scans it in the POS; it stops working once
                                  the reward is handed over. --}}
                             <div class="reward-voucher__qr-slot">
@@ -312,11 +363,9 @@
                                     </noscript>
                                 </figure>
                             </div>
-                            {{-- "QR berganti dalam 42 detik", written by voucher-qr.js. --}}
-                            <p class="reward-voucher__timer" data-voucher-timer></p>
 
                             <p class="reward-voucher__note">
-                                Tunjukkan kode QR ini ke kasir saat memesan. Kasir akan memberikan hadiahnya bersama pesanan Anda.
+                                Tunjukkan QR ini ke kasir saat memesan. Hadiahnya disajikan bersama pesanan Anda.
                             </p>
 
                             {{-- A tap anywhere on the back turns the card back. This
@@ -327,8 +376,7 @@
                             </button>
                         </section>
                     @endforeach
-                </div>
             </div>
-        @endif
+        </div>
     </div>
 </article>

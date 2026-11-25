@@ -115,6 +115,8 @@ final class LoyaltyCustomerSummary
                 'stamps' => $current->total_stamps,
                 'slots' => (int) config('loyalty.stamps_per_card'),
                 'status' => $current->status->value,
+                // Set by the card's first stamp; null before it.
+                'expires_at' => $current->expires_at?->toIso8601String(),
             ] : null,
             'rewards_redeemed' => (int) $customer->getAttribute('redemptions_count'),
             'rewards_ready' => (int) collect(self::readyRewards($customer, $rewards))->sum('count'),
