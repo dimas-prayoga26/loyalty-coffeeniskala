@@ -2,7 +2,7 @@
     The Niskala flower. Drawn in the current text colour (the PNG is used as
     a mask), so it always matches the wordmark next to it:
 
-    <x-brand.logo class="size-12 text-gold-500" />
+    <x-brand.logo class="size-12 text-rust-600" />
 
     Decorative: the NISKALA wordmark beside it carries the name.
 --}}

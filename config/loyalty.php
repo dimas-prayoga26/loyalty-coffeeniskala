@@ -112,16 +112,16 @@ return [
     */
 
     'stamp_images' => [
-        ['file' => 'images/stamps/roti-kukus-original-coklat.webp', 'label' => 'Roti Kukus Original Coklat'],
-        ['file' => 'images/stamps/roti-kukus-original-strawberry.webp', 'label' => 'Roti Kukus Original Strawberry'],
-        ['file' => 'images/stamps/roti-kukus-pandan-coklat.webp', 'label' => 'Roti Kukus Pandan Coklat'],
-        ['file' => 'images/stamps/roti-kukus-pandan-stroberi.webp', 'label' => 'Roti Kukus Pandan Stroberi'],
-        ['file' => 'images/stamps/roti-kukus-pandan-tiramisu.webp', 'label' => 'Roti Kukus Pandan Tiramisu'],
-        ['file' => 'images/stamps/americano.webp', 'label' => 'Americano'],
-        ['file' => 'images/stamps/aren-latte.webp', 'label' => 'Aren Latte'],
-        ['file' => 'images/stamps/butterscotch-latte.webp', 'label' => 'Butterscotch Latte'],
-        ['file' => 'images/stamps/matcha-latte.webp', 'label' => 'Matcha Latte'],
-        ['file' => 'images/stamps/montblanc.webp', 'label' => 'Montblanc'],
+        ['file' => 'images/stamps/roti-kukus-original-coklat.webp', 'label' => 'Roti Kukus Original Coklat', 'kind' => 'bun'],
+        ['file' => 'images/stamps/roti-kukus-original-strawberry.webp', 'label' => 'Roti Kukus Original Strawberry', 'kind' => 'bun'],
+        ['file' => 'images/stamps/roti-kukus-pandan-coklat.webp', 'label' => 'Roti Kukus Pandan Coklat', 'kind' => 'bun'],
+        ['file' => 'images/stamps/roti-kukus-pandan-stroberi.webp', 'label' => 'Roti Kukus Pandan Stroberi', 'kind' => 'bun'],
+        ['file' => 'images/stamps/roti-kukus-pandan-tiramisu-tanpa-papan.webp', 'label' => 'Roti Kukus Pandan Tiramisu', 'kind' => 'bun'],
+        ['file' => 'images/stamps/americano.webp', 'label' => 'Americano', 'kind' => 'drink'],
+        ['file' => 'images/stamps/aren-latte.webp', 'label' => 'Aren Latte', 'kind' => 'drink'],
+        ['file' => 'images/stamps/butterscotch-latte.webp', 'label' => 'Butterscotch Latte', 'kind' => 'drink'],
+        ['file' => 'images/stamps/matcha-latte.webp', 'label' => 'Matcha Latte', 'kind' => 'drink'],
+        ['file' => 'images/stamps/montblanc.webp', 'label' => 'Montblanc', 'kind' => 'drink'],
     ],
 
 ];

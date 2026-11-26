@@ -13,8 +13,8 @@ use Illuminate\Support\Facades\Log;
  * with Cloudflare's siteverify API. Tokens are single use and expire after
  * 5 minutes, so a resubmitted form needs a fresh widget.
  *
- * A valid token must also come from this form (data-action) on the domain
- * the form is posted to, so a token solved elsewhere is not accepted.
+ * In production the token must belong to this form on the configured
+ * application hostname.
  */
 class Turnstile implements ValidationRule
 {
@@ -60,17 +60,26 @@ class Turnstile implements ValidationRule
 
         // Cloudflare's always-pass testing keys (local, demo) answer for
         // example.com without an action: nothing more to compare.
+        $production = app()->isProduction();
         if ($response->json('metadata.result_with_testing_key') === true) {
+            if ($production) {
+                $fail('Verifikasi keamanan gagal. Silakan coba lagi.');
+            }
+
             return;
         }
 
-        $hostname = (string) $response->json('hostname');
+        $expectedHostname = $production ? parse_url(config('app.url'), PHP_URL_HOST) : $this->expectedHostname;
+        $hostname = $response->json('hostname');
 
-        if ($response->json('action') !== self::ACTION || strcasecmp($hostname, $this->expectedHostname) !== 0) {
+        $hostnameMatches = is_string($hostname) && is_string($expectedHostname) && $expectedHostname !== ''
+            && strcasecmp($hostname, $expectedHostname) === 0;
+
+        if ($response->json('action') !== self::ACTION || ! $hostnameMatches) {
             Log::warning('Turnstile token made for another form or domain', [
                 'action' => $response->json('action'),
                 'hostname' => $hostname,
-                'expected_hostname' => $this->expectedHostname,
+                'expected_hostname' => $expectedHostname,
             ]);
             $fail('Verifikasi keamanan gagal. Silakan coba lagi.');
         }

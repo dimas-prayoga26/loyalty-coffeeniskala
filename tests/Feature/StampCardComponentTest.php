@@ -56,14 +56,15 @@ class StampCardComponentTest extends TestCase
     public function test_both_rewards_are_listed_with_the_stamps_still_needed(): void
     {
         $this->card($this->stamps(3))
-            ->assertSeeInOrder(['Roti Kukus gratis', '2 stamp lagi', 'Minuman gratis', '7 stamp lagi'])
+            ->assertSeeInOrder(['Kumpulkan', 'Roti Kukus GRATIS', '2 stamp lagi', 'Minuman GRATIS', '7 stamp lagi'])
             ->assertDontSee('Siap ditukar');
     }
 
     public function test_the_fifth_stamp_unlocks_the_free_roti_kukus(): void
     {
         $this->card($this->stamps(5))
-            ->assertSeeInOrder(['Roti Kukus gratis', 'Siap diambil, ketuk Tukar', 'reward-row__state">Tukar<', 'Minuman gratis', '5 stamp lagi'], false)
+            ->assertSeeInOrder(['stamp-slot__print--steam', 'images/card/roti-kukus.svg', 'roti-kukus-pandan-tiramisu-tanpa-papan.webp'])
+            ->assertSeeInOrder(['Kumpulkan', 'Roti Kukus GRATIS', 'Siap diambil', 'reward-row__state">Tukar<', 'Minuman GRATIS', '5 stamp lagi'], false)
             ->assertSee('Stamp ke-5 · Roti Kukus gratis')
             ->assertSee('Siap ditukar')
             ->assertSee('Hadiah siap ditukar');
@@ -72,15 +73,39 @@ class StampCardComponentTest extends TestCase
     public function test_a_claimed_roti_kukus_stays_claimed_while_stamps_go_on_to_the_drink(): void
     {
         $this->card($this->stamps(7), redeemedRewards: [5])
-            ->assertSeeInOrder(['Roti Kukus gratis', 'Sudah ditukar', 'Minuman gratis', '3 stamp lagi'])
+            ->assertSeeInOrder(['Kumpulkan', 'Roti Kukus GRATIS', 'Sudah ditukar', 'Minuman GRATIS', '3 stamp lagi'])
             ->assertDontSee('Siap ditukar')
             ->assertDontSee('Ditukar ');
+    }
+
+    public function test_reward_spots_show_the_reward_and_the_others_a_sunburst(): void
+    {
+        $view = $this->card($this->stamps(3))
+            ->assertSeeInOrder([
+                'images/card/roti-kukus.svg', 'Stamp ke-5 · Roti Kukus gratis',
+                'images/card/minuman.svg', 'Stamp ke-10 · Minuman gratis',
+            ], false);
+
+        $view->assertDontSee('stamp-slot__print--steam');
+        $this->assertSame(8, substr_count((string) $view, 'images/card/sunburst.svg'));
+    }
+
+    public function test_a_reward_that_is_neither_food_nor_drink_keeps_a_sunburst_with_its_name(): void
+    {
+        $this->blade(
+            '<x-loyalty.stamp-card customer-code="X" card-number="X-01" :stamps="[]" :rewards="$rewards" />',
+            ['rewards' => [['stamps' => 10, 'label' => 'Tumbler gratis', 'short' => 'Tumbler', 'active' => true]]],
+        )
+            ->assertSee('gratis</small>Tumbler', false)
+            ->assertSeeInOrder(['Kumpulkan', '10', 'stamp untuk', 'Tumbler GRATIS'])
+            ->assertDontSee('images/card/minuman.svg', false)
+            ->assertDontSee('images/card/roti-kukus.svg', false);
     }
 
     public function test_a_claimed_reward_is_stamped_on_its_slot_too(): void
     {
         $view = $this->card($this->stamps(10), redeemedRewards: [5])
-            ->assertSeeInOrder(['gratis</small>Roti Kukus', 'stamp-slot__claimed">Ditukar<', 'Roti Kukus gratis, sudah ditukar', 'Stamp ke-6'], false);
+            ->assertSeeInOrder(['roti-kukus-pandan-tiramisu-tanpa-papan.webp', 'stamp-slot__claimed">Ditukar<', 'Roti Kukus gratis, sudah ditukar', 'Stamp ke-6'], false);
 
         // Only the claimed one: the free drink is still waiting.
         $this->assertSame(1, substr_count((string) $view, 'stamp-slot__claimed'));
@@ -94,13 +119,15 @@ class StampCardComponentTest extends TestCase
             '<x-loyalty.stamp-card customer-code="NSK-000001" card-number="NSK-000001-01"
                 :stamps="$stamps" :redeemed-rewards="[5]" :redeemed-at="[5 => \'2026-11-20 14:33:00\']" />',
             ['stamps' => $this->stamps(7)],
-        )->assertSeeInOrder(['Roti Kukus gratis', 'Ditukar 20 November 2026, 14.33', 'Sudah ditukar', 'Minuman gratis']);
+        )->assertSeeInOrder(['Kumpulkan', 'Roti Kukus GRATIS', 'Ditukar 20 November 2026, 14.33', 'Minuman GRATIS']);
     }
 
     public function test_the_tenth_stamp_unlocks_the_free_drink(): void
     {
         $this->card($this->stamps(10), redeemedRewards: [5])
-            ->assertSeeInOrder(['Roti Kukus gratis', 'Sudah ditukar', 'Minuman gratis', 'reward-row__state">Tukar<'], false)
+            ->assertSee('images/stamps/montblanc.webp')
+            ->assertDontSee('images/card/minuman.svg')
+            ->assertSeeInOrder(['Kumpulkan', 'Roti Kukus GRATIS', 'Sudah ditukar', 'Minuman GRATIS', 'reward-row__state">Tukar<'], false)
             ->assertSee('Hadiah siap ditukar');
     }
 
