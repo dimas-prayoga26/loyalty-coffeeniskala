@@ -3,7 +3,7 @@
         <x-brand.header />
 
         <div class="mt-9">
-            <h1 class="font-display text-2xl">Halo, {{ $customerName ?: 'Pelanggan Niskala' }}</h1>
+            <h1 class="font-serif text-2xl font-bold">Halo, {{ $customerName ?: 'Pelanggan Niskala' }}</h1>
             <p class="mt-1.5 text-sm text-espresso-600 dark:text-cream-200/70">
                 {{ $locked ? 'Kartu stamp Anda terbuka setelah PIN diganti.' : 'Ini kartu stamp Anda.' }}
             </p>
@@ -119,14 +119,14 @@
             @unless ($locked)
                 <a
                     href="{{ route('verify.pin.edit', $customerCode) }}"
-                    class="font-medium text-gold-500 underline decoration-gold-500/40 underline-offset-4 hover:decoration-gold-500 dark:text-gold-300 dark:decoration-gold-300/40"
+                    class="font-medium text-rust-600 underline decoration-rust-600/40 underline-offset-4 hover:decoration-rust-600 dark:text-cream-200 dark:decoration-cream-200/40 dark:hover:decoration-cream-200"
                 >
                     Ganti PIN
                 </a>
             @endunless
             <a
                 href="{{ route('verify.create') }}"
-                class="font-medium text-gold-500 underline decoration-gold-500/40 underline-offset-4 hover:decoration-gold-500 dark:text-gold-300 dark:decoration-gold-300/40"
+                class="font-medium text-rust-600 underline decoration-rust-600/40 underline-offset-4 hover:decoration-rust-600 dark:text-cream-200 dark:decoration-cream-200/40 dark:hover:decoration-cream-200"
             >
                 Bukan Anda? Cek nomor lain
             </a>

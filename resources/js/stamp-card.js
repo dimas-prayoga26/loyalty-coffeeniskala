@@ -11,6 +11,19 @@
  */
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
+if (!reduceMotion.matches && 'IntersectionObserver' in window) {
+    const entrance = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+            if (entry.intersectionRatio >= 0.5) {
+                entry.target.classList.add('is-in-view');
+                entrance.unobserve(entry.target);
+            }
+        }
+    }, { threshold: 0.5 });
+
+    document.querySelectorAll('.stamp-slot.is-filled').forEach((slot) => entrance.observe(slot));
+}
+
 /** Pixels a held finger may move before the press counts as a scroll or drag. */
 const HOLD_SLOP = 8;
 
@@ -37,7 +50,7 @@ const tiltOf = (slot) => parseFloat(slot.style.getPropertyValue('--tilt')) || 0;
 function moveSticker(slot, keyframes, options) {
     const sticker = stickerOf(slot);
     const now = getComputedStyle(sticker);
-    const from = { transform: now.transform, boxShadow: now.boxShadow };
+    const from = { transform: now.transform, filter: now.filter };
 
     sticker.getAnimations().forEach((animation) => {
         if (animation.id === 'sticker-hand') {
@@ -47,7 +60,8 @@ function moveSticker(slot, keyframes, options) {
 
     const resolved = keyframes.map(({ shadow, ...frame }) => ({
         ...frame,
-        ...(shadow ? { boxShadow: now.getPropertyValue(shadow).trim() } : {}),
+        // The shadow follows the product's outline: a drop-shadow filter.
+        ...(shadow ? { filter: now.getPropertyValue(shadow).trim() } : {}),
     }));
 
     sticker.animate([from, ...resolved], options).id = 'sticker-hand';

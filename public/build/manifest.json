@@ -1,7 +1,23 @@
 {
-  "_fonts-kIGtXThy.css": {
-    "file": "assets/fonts-kIGtXThy.css",
-    "src": "_fonts-kIGtXThy.css"
+  "_fonts-teTd-UiS.css": {
+    "file": "assets/fonts-teTd-UiS.css",
+    "src": "_fonts-teTd-UiS.css"
+  },
+  "_fraunces-300-normal-BJaf1pbq.woff": {
+    "file": "assets/fraunces-300-normal-BJaf1pbq.woff",
+    "src": "_fraunces-300-normal-BJaf1pbq.woff"
+  },
+  "_fraunces-300-normal-CTWA4xHV.woff2": {
+    "file": "assets/fraunces-300-normal-CTWA4xHV.woff2",
+    "src": "_fraunces-300-normal-CTWA4xHV.woff2"
+  },
+  "_fraunces-700-normal-CEOla-zY.woff2": {
+    "file": "assets/fraunces-700-normal-CEOla-zY.woff2",
+    "src": "_fraunces-700-normal-CEOla-zY.woff2"
+  },
+  "_fraunces-700-normal-DTjk5d1Q.woff": {
+    "file": "assets/fraunces-700-normal-DTjk5d1Q.woff",
+    "src": "_fraunces-700-normal-DTjk5d1Q.woff"
   },
   "_instrument-sans-400-normal-D1W7dsQl.woff": {
     "file": "assets/instrument-sans-400-normal-D1W7dsQl.woff",
@@ -44,7 +60,7 @@
     "src": "_marcellus-400-normal-AvMY561b.woff"
   },
   "resources/css/app.css": {
-    "file": "assets/app-DPkwWI27.css",
+    "file": "assets/app-B4LIUQMZ.css",
     "name": "app",
     "names": [
       "app.css"
@@ -53,7 +69,7 @@
     "isEntry": true
   },
   "resources/js/app.js": {
-    "file": "assets/app-yu5C5X59.js",
+    "file": "assets/app-7spN6yYI.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true

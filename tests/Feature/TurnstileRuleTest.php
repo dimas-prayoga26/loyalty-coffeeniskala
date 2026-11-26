@@ -64,6 +64,37 @@ class TurnstileRuleTest extends TestCase
         $this->assertFalse($this->passes());
     }
 
+    public function test_production_uses_the_configured_hostname_even_when_the_request_host_matches_the_token(): void
+    {
+        $this->app->detectEnvironment(fn () => 'production');
+        config(['app.url' => 'https://coffeeniskala.com/loyalty']);
+        $this->cloudflareAnswers(['success' => true, 'hostname' => 'localhost', 'action' => 'verify']);
+
+        $this->assertFalse($this->passes(host: 'localhost'));
+    }
+
+    public function test_production_accepts_the_verify_action_on_the_configured_hostname(): void
+    {
+        $this->app->detectEnvironment(fn () => 'production');
+        config(['app.url' => 'https://coffeeniskala.com/loyalty']);
+        $this->cloudflareAnswers(['success' => true, 'hostname' => 'coffeeniskala.com', 'action' => 'verify']);
+
+        $this->assertTrue($this->passes());
+    }
+
+    public function test_production_rejects_the_testing_key_response(): void
+    {
+        $this->app->detectEnvironment(fn () => 'production');
+        config(['app.url' => 'https://coffeeniskala.com/loyalty']);
+        $this->cloudflareAnswers([
+            'success' => true,
+            'hostname' => 'example.com',
+            'metadata' => ['result_with_testing_key' => true],
+        ]);
+
+        $this->assertFalse($this->passes());
+    }
+
     public function test_a_used_or_invalid_token_fails(): void
     {
         $this->cloudflareAnswers(['success' => false, 'error-codes' => ['timeout-or-duplicate']]);

@@ -108,7 +108,7 @@ class CustomerVerificationTest extends TestCase
             ->assertSee('0800••••0301')
             ->assertSee('4 dari 10 stamp terkumpul')
             ->assertSee('terkumpul '.$this->stampDay(3))
-            ->assertSeeInOrder(['Roti Kukus gratis', '1 stamp lagi', 'Minuman gratis', '6 stamp lagi'])
+            ->assertSeeInOrder(['Kumpulkan', 'Roti Kukus GRATIS', '1 stamp lagi', 'Minuman GRATIS', '6 stamp lagi'])
             ->assertDontSee('Ganti PIN dulu')
             ->assertSee('noindex', false)
             ->assertHeader('Cache-Control', 'no-store, private');
@@ -460,7 +460,7 @@ class CustomerVerificationTest extends TestCase
 
         $this->get('/verify-success/'.$code)
             ->assertOk()
-            ->assertSeeInOrder(['Roti Kukus gratis', 'Ditukar 20 November 2026, 14.33', 'Sudah ditukar']);
+            ->assertSeeInOrder(['Kumpulkan', 'Roti Kukus GRATIS', 'Ditukar 20 November 2026, 14.33', 'Minuman GRATIS']);
     }
 
     public function test_the_blurred_card_does_not_say_when_a_reward_was_handed_over(): void

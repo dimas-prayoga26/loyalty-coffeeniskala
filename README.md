@@ -87,18 +87,18 @@ Halaman membaca `loyalty_customers` dan memeriksa token Turnstile ke Cloudflare.
 ### Tampilan kartu stamp
 
 - **Komponen:** `<x-loyalty.stamp-card>` di `resources/views/components/loyalty/stamp-card.blade.php`, dengan style di `resources/css/app.css`.
-- **Konsep:** kartu stamp kertas yang dicap barista. Hindari gradien, glow, dan efek 3D hiasan (tilt mengikuti kursor, kilau). Satu-satunya gerak 3D adalah membalik kartu, seperti kartu kertas yang dibalik.
-  - Bagian cetak (lingkaran, teks, daftar hadiah) diam.
-  - Yang ditambahkan orang bergerak: stiker produk ditempel satu per satu, tanggal ditulis pulpen (font Kalam), dan cap merah "Siap ditukar" dihentakkan terakhir.
+- **Konsep:** kartu stamp cetak yang dicap barista, mengikuti desain `Kartu Loyalti Niskala 1.pdf`: kertas cokelat bata (`rust-600`, #89402D) dengan cetakan krem (`cream-100`, #FFEEDC), judul Fraunces. Halaman verifikasi/PIN memakai kertas dan warna yang sama. Hindari gradien, glow, dan efek 3D hiasan (tilt mengikuti kursor, kilau). Satu-satunya gerak 3D adalah membalik kartu, seperti kartu kertas yang dibalik.
+  - Bagian cetak diam: bintang stamp, gambar hadiah di slotnya (roti kukus, gelas minuman; SVG di `public/images/card/`, diambil dari PDF), bagian "Kumpulkan", dan kotak "Pemilik kartu".
+  - Yang ditambahkan orang bergerak: stiker produk ditempel satu per satu, tanggal ditulis pulpen (font Kalam), dan cap krem "Tukar" dihentakkan terakhir.
 - **Interaksi:** tap atau hover slot untuk melihat keterangannya. Stiker produk bisa "dipegang": ditekan dan ditahan, stiker terangkat dari kartu; dilepas, stiker ditekan kembali sampai menempel. Script-nya di `resources/js/stamp-card.js`; tanpa JS kartu tetap tampil lengkap.
 - **Voucher di belakang kartu:** kartu yang punya hadiah *Siap ditukar* punya dua sisi. Voucher (QR) dicetak di belakang. Kodenya tetap selama kartu berlaku (`NSKV1.<nomor kartu>.<stamp>.<tanda tangan>`, lihat `RewardVoucher`), dan saat dipindai kasir, POS otomatis mengisi nama dan nomor HP pelanggan. Tombol Tukar membalik kartu ke voucher hadiah itu. Ketuk sisi belakang (atau tekan Esc) untuk membaliknya lagi, dan kartu juga bisa dibalik dengan digeser ke samping. Tombol "Balik ke depan kartu" hanya untuk keyboard dan screen reader, dan baru terlihat saat difokus. Script-nya di `resources/js/card-flip.js`. Kartu tanpa hadiah siap ditukar hanya punya satu sisi dan tidak bisa dibalik. Tanpa JS, voucher tampil di bawah kartu.
 - **Logo:** bunga Niskala ada di `public/images/brand/niskala-logo.png`, dibuat dari `Logo Niskala.png` di proyek `andalan-migration`.
-  - Tampil lewat `<x-brand.logo class="size-12 text-gold-500" />`. File PNG dipakai sebagai mask, jadi warnanya mengikuti warna teks.
+  - Tampil lewat `<x-brand.logo class="size-12 text-rust-600" />`. File PNG dipakai sebagai mask, jadi warnanya mengikuti warna teks.
   - `public/favicon.ico` dan `public/images/brand/apple-touch-icon.png` dibuat dari logo yang sama.
-- **Gambar stamp:** foto produk 400px WebP di `public/images/stamps/`. Urutan per slot diatur di `config/loyalty.php` (`stamp_images`), dan jumlah slot di `LOYALTY_STAMPS_PER_CARD`. Slot 1–5 memakai foto roti kukus (hadiah stamp ke-5), slot 6–10 foto minuman (hadiah stamp ke-10).
+- **Gambar stamp:** foto produk 400px WebP transparan di `public/images/stamps/`: latar putihnya dihapus (bayangan dan tutup gelas bening dibuat semi-transparan), jadi produk langsung menyatu dengan bintang stamp tanpa lingkaran putih. Foto baru perlu diproses dengan cara yang sama. Urutan per slot diatur di `config/loyalty.php` (`stamp_images`), dan jumlah slot di `LOYALTY_STAMPS_PER_CARD`. Slot 1–5 memakai foto roti kukus (hadiah stamp ke-5), slot 6–10 foto minuman (hadiah stamp ke-10).
 - **Hadiah:** tersimpan di tabel `loyalty_rewards` dan diatur dari POS (Pengaturan → Program Promo). `config/loyalty.php` (`rewards`) hanya daftar awal. Stamp ke-5 membuka **roti kukus gratis**, stamp ke-10 membuka **minuman gratis**.
   - Kedua hadiah ditukar terpisah. Mengambil roti kukus gratis tidak mereset kartu; stamp tetap lanjut sampai 10.
-  - Slot hadiah ditandai di kartu, dan di bawah grid ada daftar hadiah. Status tiap hadiah: *x stamp lagi*, *Siap ditukar*, atau *Sudah ditukar*.
+  - Slot hadiah ditandai gambarnya di kartu (gelas kalau namanya minuman/kopi, roti kukus kalau roti/kue; hadiah lain tetap bintang dengan namanya). Di bawah grid ada bagian "Kumpulkan" (*5 stamp untuk Roti Kukus GRATIS*), dengan status tiap hadiah di bawahnya: *x stamp lagi*, *Siap diambil* + tombol Tukar, atau *Sudah ditukar* / tanggal ditukar.
   - Hadiah yang sudah diambil dikirim ke komponen lewat `:redeemed-rewards="[5]"`.
 - **Pratinjau:** semua keadaan kartu bisa dilihat di `/preview/stamp-card`. Rute ini hanya ada di environment `local`.
 

@@ -16,6 +16,10 @@ export default defineConfig({
                 bunny('Marcellus', {
                     weights: [400],
                 }),
+                // The card's print (Kartu Loyalti Niskala): bold headings, light text.
+                bunny('Fraunces', {
+                    weights: [300, 700],
+                }),
                 // Handwriting: the barista's pen on the stamp card.
                 bunny('Kalam', {
                     weights: [400],

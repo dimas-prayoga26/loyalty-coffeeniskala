@@ -1,8 +1,8 @@
 <x-layouts.app title="Pratinjau Kartu Stamp">
     <main class="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
         <header class="max-w-2xl">
-            <p class="text-xs font-medium tracking-[0.25em] text-gold-500 uppercase dark:text-gold-300">Niskala Loyalty</p>
-            <h1 class="mt-2 font-display text-3xl sm:text-4xl">Pratinjau Kartu Stamp</h1>
+            <p class="text-xs font-medium tracking-[0.25em] text-rust-600 uppercase dark:text-cream-200">Niskala Loyalty</p>
+            <h1 class="mt-2 font-serif text-3xl font-bold sm:text-4xl">Pratinjau Kartu Stamp</h1>
             <p class="mt-3 text-sm leading-relaxed text-espresso-600 dark:text-cream-200/70">
                 Contoh tampilan kartu di setiap keadaan. Datanya contoh, belum dari database.
                 Muat ulang halaman untuk melihat lagi animasi stamp terbaru.

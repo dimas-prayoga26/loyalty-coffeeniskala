@@ -90,7 +90,7 @@
         <p class="mt-8 text-center text-sm">
             <a
                 href="{{ route('verify.success', $customerCode) }}"
-                class="font-medium text-gold-500 underline decoration-gold-500/40 underline-offset-4 hover:decoration-gold-500 dark:text-gold-300 dark:decoration-gold-300/40"
+                class="font-medium text-rust-600 underline decoration-rust-600/40 underline-offset-4 hover:decoration-rust-600 dark:text-cream-200 dark:decoration-cream-200/40 dark:hover:decoration-cream-200"
             >
                 Kembali ke kartu
             </a>

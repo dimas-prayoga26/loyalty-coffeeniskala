@@ -5,7 +5,7 @@
  * a stamp or a button) or a sideways drag shows the customer QR; TUKAR shows
  * that reward's voucher; a tap on the back or Esc turns it back. A drag
  * follows the pointer, let go and the card falls to the nearer side (or the
- * other side, after a quick flick). The QR button next to the owner's name
+ * other side, after a quick flick). The QR button in the footer
  * turns it too. Keyboards and screen readers also get "Balik ke depan
  * kartu", hidden until focused.
  *
