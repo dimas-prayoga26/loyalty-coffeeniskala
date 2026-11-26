@@ -1079,12 +1079,12 @@
         transition: box-shadow 0.15s;
     }
 
+    /* A faint pencil sample in the pen's own hand and size. A smaller
+       printed one sat low in the box, and the caret, sized for the pen,
+       cut through its first digit. */
     .verify-card__input::placeholder {
         color: var(--box-ink-soft);
-        opacity: 0.6;
-        font-family: var(--font-sans);
-        font-size: 1rem;
-        letter-spacing: 0.04em;
+        opacity: 0.5;
     }
 
     .verify-card__input:focus {
@@ -1121,6 +1121,11 @@
     .verify-card__input--pin {
         max-width: 8.5rem;
         letter-spacing: 0.35em;
+    }
+
+    /* "4 angka" spaced out like the digits would not fit the short box. */
+    .verify-card__input--pin::placeholder {
+        letter-spacing: 0.02em;
     }
 
     .verify-card__hint {
