@@ -309,6 +309,10 @@
             drop-shadow(0 0 0 rgb(42 29 20 / 0))
             drop-shadow(0 0 1px rgb(42 29 20 / 0.25));
 
+        /* When it is put on as the card opens. */
+        --placing-delay: calc(var(--i, 0) * 80ms + 150ms);
+        --placing-time: 0.55s;
+
         position: absolute;
         inset: 10%;
         display: grid;
@@ -320,17 +324,29 @@
             filter 0.25s;
     }
 
+    /* Opening the card, the stickers go on one after another. A drink or a
+       roti kukus is dropped flat, then the product itself moves once it
+       has landed (see the img below). */
     .stamp-slot.is-in-view .stamp-slot__sticker {
-        animation: var(--sticker-entrance, sticker-place) 0.55s ease-in-out backwards;
-        animation-delay: calc(var(--i, 0) * 80ms + 150ms);
+        animation: var(--sticker-entrance, sticker-place) var(--placing-time) ease-in-out var(--placing-delay) backwards;
     }
 
-    .stamp-slot__sticker[data-product="drink"] {
-        --sticker-entrance: cup-rock;
-    }
-
+    .stamp-slot__sticker[data-product="drink"],
     .stamp-slot__sticker[data-product="bun"] {
-        --sticker-entrance: bun-bounce;
+        --sticker-entrance: sticker-drop;
+    }
+
+    /* The cup shakes left and right on its base, dying down. */
+    .stamp-slot.is-in-view .stamp-slot__sticker[data-product="drink"] img {
+        transform-origin: 50% 88%;
+        animation: cup-shake 0.9s ease-in-out calc(var(--placing-delay) + var(--placing-time) - 0.1s);
+    }
+
+    /* The steamed bun is soft: it squashes where it lands and springs
+       back, wobbling like the dough. */
+    .stamp-slot.is-in-view .stamp-slot__sticker[data-product="bun"] img {
+        transform-origin: 50% 80%;
+        animation: bun-squish 0.8s ease-in-out calc(var(--placing-delay) + var(--placing-time) - 0.1s);
     }
 
     /* A long press is for lifting the product, not for the browser's
@@ -396,8 +412,8 @@
 
     /* The newest sticker goes on last, a beat after the others. */
     .stamp-slot.is-fresh .stamp-slot__sticker {
-        animation-duration: 0.7s;
-        animation-delay: calc(var(--i, 0) * 80ms + 550ms);
+        --placing-delay: calc(var(--i, 0) * 80ms + 550ms);
+        --placing-time: 0.7s;
     }
 
     /* Picking at a sticker: it lifts and straightens a little. */
@@ -1302,18 +1318,28 @@
     }
 }
 
-@keyframes cup-rock {
-    0% { opacity: 0; transform: translateY(-3px) rotate(calc(var(--tilt) - 9deg)); }
-    35% { opacity: 1; transform: rotate(calc(var(--tilt) + 6deg)); }
-    65% { transform: rotate(calc(var(--tilt) - 3deg)); }
+@keyframes sticker-drop {
+    0% { opacity: 0; transform: translateY(-10%) rotate(var(--tilt)); }
+    60% { opacity: 1; transform: translateY(1.5%) rotate(var(--tilt)); }
     100% { transform: rotate(var(--tilt)); }
 }
 
-@keyframes bun-bounce {
-    0% { opacity: 0; transform: translateY(-9%) rotate(var(--tilt)); }
-    40% { opacity: 1; transform: translateY(2%) rotate(var(--tilt)) scale(1.05, 0.94); }
-    68% { transform: translateY(-4%) rotate(var(--tilt)); }
-    100% { transform: rotate(var(--tilt)); }
+@keyframes cup-shake {
+    0%, 100% { transform: none; }
+    10% { transform: translateX(-6%) rotate(-8deg); }
+    24% { transform: translateX(6%) rotate(7deg); }
+    38% { transform: translateX(-5%) rotate(-6deg); }
+    52% { transform: translateX(4%) rotate(4deg); }
+    66% { transform: translateX(-2%) rotate(-2.5deg); }
+    80% { transform: translateX(1%) rotate(1deg); }
+}
+
+@keyframes bun-squish {
+    0%, 100% { transform: none; }
+    16% { transform: scale(1.14, 0.84); }
+    36% { transform: scale(0.93, 1.09); }
+    56% { transform: scale(1.05, 0.96); }
+    76% { transform: scale(0.99, 1.02); }
 }
 
 @keyframes stamp-thud {
