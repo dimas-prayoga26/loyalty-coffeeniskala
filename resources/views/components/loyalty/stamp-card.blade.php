@@ -7,8 +7,8 @@
     rubber TUKAR stamp) are the ones that move.
 
     <x-loyalty.stamp-card
-        customer-code="26-11-001"
-        card-number="26-11-001"
+        customer-code="26110001"
+        card-number="26110001"
         customer-name="Budi"            (optional)
         phone="6281234567890"           (optional, normalized form)
         :stamps="$datesOfCollectedStamps" (Carbon|string, oldest first; null = date not shown)
@@ -120,8 +120,8 @@
         ? 'Berlaku '.config('loyalty.card_valid_months').' bulan sejak stamp pertama'
         : null;
 
-    // One voucher per ready reward, unique on the page: voucher-26-11-001-5;
-    // the customer QR is stamps 0 (voucher-26-11-001-0).
+    // One voucher per ready reward, unique on the page: voucher-26110001-5;
+    // the customer QR is stamps 0 (voucher-26110001-0).
     $voucherId = fn (array $reward) => 'voucher-'.\Illuminate\Support\Str::slug($cardNumber).'-'.$reward['stamps'];
     $memberVoucherId = $voucherId(['stamps' => \App\Services\Loyalty\RewardVoucher::MEMBER]);
     $memberCode = \App\Services\Loyalty\RewardVoucher::code($cardNumber, \App\Services\Loyalty\RewardVoucher::MEMBER);

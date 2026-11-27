@@ -8,6 +8,7 @@ use App\Models\LoyaltyCard;
 use App\Models\LoyaltyCustomer;
 use App\Services\Loyalty\LoyaltyRegistrationService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use OverflowException;
 use Tests\TestCase;
 
 /**
@@ -29,7 +30,7 @@ class LoyaltyRegistrationTest extends TestCase
 
     public function test_an_unregistered_number_creates_the_customer_and_a_first_active_card(): void
     {
-        $this->travelTo('2026-11-25 10:00:00');
+        $this->travelTo('2024-11-25 10:00:00');
         $result = $this->service->registerOrRetrieve('0800-0000-0001', 'Budi');
 
         $this->assertTrue($result->customerCreated);
@@ -39,12 +40,12 @@ class LoyaltyRegistrationTest extends TestCase
         $this->assertTrue($customer->is($result->customer));
         $this->assertSame('Budi', $customer->customer_name);
         // year-month-sequence of the month they registered, like card numbers.
-        $this->assertSame('26-11-001', $customer->customer_code);
+        $this->assertSame('24110001', $customer->customer_code);
 
         $card = $customer->cards()->sole();
         $this->assertTrue($card->is($result->card));
         // year-month-sequence of the month it was issued.
-        $this->assertSame('26-11-001', $card->card_number);
+        $this->assertSame('24110001', $card->card_number);
         $this->assertSame(LoyaltyCardStatus::Active, $card->status);
         $this->assertSame(0, $card->total_stamps);
     }
@@ -73,26 +74,38 @@ class LoyaltyRegistrationTest extends TestCase
 
     public function test_card_numbers_count_up_within_a_month_and_start_again_the_next(): void
     {
-        $this->travelTo('2026-11-30 23:50:00');
-        $this->assertSame('26-11-001', $this->service->registerOrRetrieve('0800-0000-0011')->card->card_number);
-        $this->assertSame('26-11-002', $this->service->registerOrRetrieve('0800-0000-0012')->card->card_number);
+        $this->travelTo('2024-11-30 23:50:00');
+        $this->assertSame('24110001', $this->service->registerOrRetrieve('0800-0000-0011')->card->card_number);
+        $this->assertSame('24110002', $this->service->registerOrRetrieve('0800-0000-0012')->card->card_number);
 
-        // 1 December WIB: a new month, back to 001 (customer code and card).
-        $this->travelTo('2026-12-01 00:05:00');
+        // 1 December WIB: a new month, back to 0001 (customer code and card).
+        $this->travelTo('2024-12-01 00:05:00');
         $december = $this->service->registerOrRetrieve('0800-0000-0013');
-        $this->assertSame('26-12-001', $december->card->card_number);
-        $this->assertSame('26-12-001', $december->customer->customer_code);
-        $this->assertSame('26-11-002', LoyaltyCustomer::where('phone_number', '6280000000012')->value('customer_code'));
+        $this->assertSame('24120001', $december->card->card_number);
+        $this->assertSame('24120001', $december->customer->customer_code);
+        $this->assertSame('24110002', LoyaltyCustomer::where('phone_number', '6280000000012')->value('customer_code'));
 
         // The highest number of the month counts, not how many cards there are.
-        LoyaltyCard::query()->where('card_number', '26-12-001')->update(['card_number' => '26-12-041']);
-        $this->assertSame('26-12-042', LoyaltyCard::nextCardNumber());
-        $this->assertSame('27-01-001', LoyaltyCard::nextCardNumber(now()->addMonth()));
+        LoyaltyCard::query()->where('card_number', '24120001')->update(['card_number' => '24120041']);
+        $this->assertSame('24120042', LoyaltyCard::nextCardNumber());
+        $this->assertSame('25010001', LoyaltyCard::nextCardNumber(now()->addMonth()));
+    }
+
+    public function test_card_numbers_stop_at_four_sequence_digits(): void
+    {
+        $this->travelTo('2037-08-10 10:00:00');
+        $card = $this->service->registerOrRetrieve('0800-0000-0014')->card;
+        $card->update(['card_number' => '37089998']);
+        $lastCard = $this->service->registerOrRetrieve('0800-0000-0015')->card;
+        $this->assertSame('37089999', $lastCard->card_number);
+
+        $this->expectException(OverflowException::class);
+        $this->service->registerOrRetrieve('0800-0000-0016');
     }
 
     public function test_a_customer_without_an_active_card_gets_a_new_one(): void
     {
-        $this->travelTo('2026-11-25 10:00:00');
+        $this->travelTo('2024-11-25 10:00:00');
         $first = $this->service->registerOrRetrieve('0800-0000-0004');
         $first->card->update(['status' => LoyaltyCardStatus::Completed]);
 
@@ -101,7 +114,7 @@ class LoyaltyRegistrationTest extends TestCase
         $this->assertFalse($again->customerCreated);
         $this->assertTrue($again->cardCreated);
         $this->assertFalse($again->card->is($first->card));
-        $this->assertSame('26-11-002', $again->card->card_number);
+        $this->assertSame('24110002', $again->card->card_number);
         $this->assertSame(LoyaltyCardStatus::Active, $again->card->status);
 
         $this->assertSame(LoyaltyCardStatus::Completed, $first->card->fresh()->status);
